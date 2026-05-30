@@ -60,6 +60,14 @@ Binary is typically 3–8 MB on macOS.
 
 ---
 
+## Agent log
+
+| Agent | Task | Status | Date |
+|-------|------|--------|------|
+| 3 | Folder Support - Tauri permissions + integration smoke test | Code complete; smoke test skipped by user request | 2026-05-30 |
+
+---
+
 ## Adding AI features (V2 checklist)
 
 When you're ready to wire in the AI layer:

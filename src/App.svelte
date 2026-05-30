@@ -2,8 +2,9 @@
   import { open } from '@tauri-apps/plugin-dialog'
   import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
   import Editor from './lib/components/Editor.svelte'
+  import FileTree from './lib/components/FileTree.svelte'
   import OutlinePanel from './lib/components/OutlinePanel.svelte'
-  import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
+  // import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
   import { app } from './lib/app.js'
 
   // ─── State ────────────────────────────────────────────────────
@@ -12,9 +13,12 @@
   let savedContent = $state('')
   let saveStatus   = $state('idle') // 'idle' | 'saving' | 'saved' | 'error'
   let showOutline  = $state(false)
+  let folderPath   = $state(null)
+  let showSidebar  = $state(false)
 
   // ─── Derived ──────────────────────────────────────────────────
   let isDirty  = $derived(content !== savedContent)
+  let hasSidebar = $derived(!!folderPath && showSidebar)
   let fileName = $derived(
     filePath
       ? filePath.split('/').pop().split('\\').pop()
@@ -38,6 +42,21 @@
     savedContent = text
   }
 
+  async function openFolder() {
+    const selected = await open({ directory: true, multiple: false })
+    if (!selected) return
+    folderPath = selected
+    showSidebar = true
+  }
+
+  async function openFileFromTree(path) {
+    if (isDirty) await saveFile()
+    const text = await readTextFile(path)
+    filePath = path
+    content = text
+    savedContent = text
+  }
+
   async function saveFile() {
     if (!filePath || !isDirty) return
     saveStatus = 'saving'
@@ -58,9 +77,17 @@
       e.preventDefault()
       saveFile()
     }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+      e.preventDefault()
+      openFolder()
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === 'o') {
       e.preventDefault()
       openFile()
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'b' && folderPath) {
+      e.preventDefault()
+      showSidebar = !showSidebar
     }
     if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
       e.preventDefault()
@@ -105,7 +132,9 @@
   <!-- ─── Editor ──────────────────────────────────────── -->
   {:else}
     <header class="topbar">
-      <div class="topbar-drag" data-tauri-drag-region>
+      <div class="topbar-drag" data-tauri-drag-region></div>
+
+      <div class="topbar-inner">
         <!-- traffic lights live here on macOS overlay mode (~80px) -->
         <div class="traffic-light-spacer"></div>
 
@@ -116,46 +145,61 @@
             {#if isDirty}<span class="tab-dot"></span>{/if}
           </div>
         </div>
-      </div>
 
-      <!-- right actions -->
-      <div class="topbar-actions">
-        <span class="save-indicator" class:visible={saveStatus !== 'idle'}>
-          {#if saveStatus === 'saving'}saving…
-          {:else if saveStatus === 'saved'}saved
-          {:else if saveStatus === 'error'}error
-          {/if}
-        </span>
-        <button class="action" onclick={openFile} title="Open file (⌘O)">
-          open
-        </button>
-        <button
-          class="action outline-toggle"
-          class:active={showOutline}
-          onclick={() => showOutline = !showOutline}
-          title="Document outline (⌘\)"
-          aria-label="Toggle outline"
-        >
-          <svg width="13" height="11" viewBox="0 0 13 11" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect x="0" y="0" width="13" height="1.5" rx="0.75" fill="currentColor"/>
-            <rect x="2" y="4" width="9" height="1.5" rx="0.75" fill="currentColor"/>
-            <rect x="4" y="8" width="6" height="1.5" rx="0.75" fill="currentColor"/>
-          </svg>
-        </button>
+        <!-- right actions -->
+        <div class="topbar-actions">
+          <span class="save-indicator" class:visible={saveStatus !== 'idle'}>
+            {#if saveStatus === 'saving'}saving…
+            {:else if saveStatus === 'saved'}saved
+            {:else if saveStatus === 'error'}error
+            {/if}
+          </span>
+          <button class="action" onclick={openFile} title="Open file (⌘O)">
+            open
+          </button>
+          <button class="action" onclick={openFolder} title="Open folder (⌘⇧O)">
+            folder
+          </button>
+          <button
+            class="action outline-toggle"
+            class:active={showOutline}
+            onclick={() => showOutline = !showOutline}
+            title="Document outline (⌘\)"
+            aria-label="Toggle outline"
+          >
+            <svg width="13" height="11" viewBox="0 0 13 11" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="0" y="0" width="13" height="1.5" rx="0.75" fill="currentColor"/>
+              <rect x="2" y="4" width="9" height="1.5" rx="0.75" fill="currentColor"/>
+              <rect x="4" y="8" width="6" height="1.5" rx="0.75" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </header>
 
-    <!-- key block destroys + remounts Editor when file changes -->
-    {#key filePath}
-      <div class="editor-wrap">
-        <Editor
-          initialContent={content}
-          onContentChange={handleContentChange}
-        />
-      </div>
-    {/key}
+    <div class="workspace">
+      {#if hasSidebar}
+        <aside class="sidebar">
+          <FileTree
+            rootPath={folderPath}
+            activeFile={filePath}
+            onSelect={openFileFromTree}
+          />
+        </aside>
+      {/if}
 
-    <DocumentMetaBar {content} />
+      <!-- key block destroys + remounts Editor when file changes -->
+      {#key filePath}
+        <div class="editor-wrap">
+          <Editor
+            initialContent={content}
+            onContentChange={handleContentChange}
+          />
+        </div>
+      {/key}
+    </div>
+
+    <!-- <DocumentMetaBar {content} /> -->
 
     <!-- outline panel -->
     {#if showOutline}
@@ -181,23 +225,33 @@
   .titlebar-drag {
     height: 38px;
     flex-shrink: 0;
+    -webkit-app-region: drag;
   }
 
   /* ─── Topbar ─────────────────────────────────────────── */
   .topbar {
-    display: flex;
-    align-items: stretch;
+    position: relative;
     height: 38px;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
   }
 
+  /* full-width drag layer behind topbar content */
   .topbar-drag {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    -webkit-app-region: drag;
+  }
+
+  .topbar-inner {
+    position: relative;
+    z-index: 1;
     display: flex;
     align-items: stretch;
-    flex: 1;
-    min-width: 0;
+    height: 100%;
+    pointer-events: none;
   }
 
   /* space for macOS traffic lights (red/yellow/green) */
@@ -271,6 +325,7 @@
     gap: 10px;
     padding: 0 12px;
     margin-left: auto;
+    pointer-events: auto;
   }
 
   .save-indicator {
@@ -310,6 +365,21 @@
     color: var(--accent);
     border-color: rgba(74, 222, 128, 0.4);
     background: var(--accent-dim);
+  }
+
+  /* ─── Workspace ──────────────────────────────────────── */
+  .workspace {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .sidebar {
+    width: 200px;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
   }
 
   /* ─── Editor wrapper ─────────────────────────────────── */
