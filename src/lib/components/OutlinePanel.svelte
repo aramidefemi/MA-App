@@ -4,12 +4,15 @@
      * Parses headings from markdown content, renders hierarchy,
      * scrolls to heading on click.
      */
-  
+    import { getDocumentStats, readingMinutes } from '../documentStats.js'
+
     let { content = '', onClose } = $props()
-  
+
     // ─── Parse headings from markdown ──────────────────────
+
     let headings = $derived(parseHeadings(content))
-    let stats    = $derived(getStats(content))
+    let stats    = $derived(getDocumentStats(content))
+    let readMins = $derived(readingMinutes(stats.readingSeconds))
   
     function parseHeadings(markdown) {
       return markdown
@@ -21,20 +24,6 @@
           return { level: match[1].length, text: match[2].trim(), index: i }
         })
         .filter(Boolean)
-    }
-  
-    function getStats(markdown) {
-      // strip markdown syntax for accurate word count
-      const plain = markdown
-        .replace(/```[\s\S]*?```/g, '')
-        .replace(/`[^`]+`/g, '')
-        .replace(/^#{1,6}\s+/gm, '')
-        .replace(/[*_~>\[\]()#\-]/g, ' ')
-        .trim()
-      const words = plain.split(/\s+/).filter(w => w.length > 0).length
-      const chars = plain.replace(/\s/g, '').length
-      const mins  = Math.max(1, Math.ceil(words / 200))
-      return { words, chars, mins }
     }
   
     // ─── Scroll to heading in editor ───────────────────────
@@ -90,7 +79,7 @@
     <div class="stats">
       <span>{stats.words.toLocaleString()} words</span>
       <span class="divider">·</span>
-      <span>{stats.mins} min read</span>
+      <span>{readMins} min read</span>
     </div>
   </div>
   

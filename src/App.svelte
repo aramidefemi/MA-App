@@ -3,6 +3,7 @@
   import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
   import Editor from './lib/components/Editor.svelte'
   import OutlinePanel from './lib/components/OutlinePanel.svelte'
+  import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
   import { app } from './lib/app.js'
 
   // ─── State ────────────────────────────────────────────────────
@@ -82,7 +83,7 @@
 
   <!-- ─── Empty state ─────────────────────────────────── -->
   {#if !filePath}
-    <div class="titlebar-drag"></div>
+    <div class="titlebar-drag" data-tauri-drag-region></div>
     <div class="empty">
       <div class="empty-inner">
         <div class="logo">{app.emptyState.logo}</div>
@@ -104,14 +105,16 @@
   <!-- ─── Editor ──────────────────────────────────────── -->
   {:else}
     <header class="topbar">
-      <!-- traffic lights live here on macOS overlay mode (~80px) -->
-      <div class="traffic-light-spacer"></div>
+      <div class="topbar-drag" data-tauri-drag-region>
+        <!-- traffic lights live here on macOS overlay mode (~80px) -->
+        <div class="traffic-light-spacer"></div>
 
-      <!-- tab strip -->
-      <div class="tabs">
-        <div class="tab active">
-          <span class="tab-name">{fileName}</span>
-          {#if isDirty}<span class="tab-dot"></span>{/if}
+        <!-- tab strip -->
+        <div class="tabs">
+          <div class="tab active">
+            <span class="tab-name">{fileName}</span>
+            {#if isDirty}<span class="tab-dot"></span>{/if}
+          </div>
         </div>
       </div>
 
@@ -152,6 +155,8 @@
       </div>
     {/key}
 
+    <DocumentMetaBar {content} />
+
     <!-- outline panel -->
     {#if showOutline}
       <OutlinePanel
@@ -176,7 +181,6 @@
   .titlebar-drag {
     height: 38px;
     flex-shrink: 0;
-    -webkit-app-region: drag;
   }
 
   /* ─── Topbar ─────────────────────────────────────────── */
@@ -187,7 +191,13 @@
     background: var(--surface);
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
-    -webkit-app-region: drag;
+  }
+
+  .topbar-drag {
+    display: flex;
+    align-items: stretch;
+    flex: 1;
+    min-width: 0;
   }
 
   /* space for macOS traffic lights (red/yellow/green) */
@@ -202,7 +212,6 @@
     align-items: stretch;
     flex: 1;
     min-width: 0;
-    -webkit-app-region: no-drag;
   }
 
   .tab {
@@ -262,7 +271,6 @@
     gap: 10px;
     padding: 0 12px;
     margin-left: auto;
-    -webkit-app-region: no-drag;
   }
 
   .save-indicator {
