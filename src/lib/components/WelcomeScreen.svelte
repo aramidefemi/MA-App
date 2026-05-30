@@ -4,6 +4,7 @@
 
   /** @type {{
     // recentProjects: import('../recentProjects.js').RecentProject[],
+    onStartWriting: () => void,
     onOpenFile: () => void,
     onOpenFolder: () => void,
     // onOpenRecent: (project: import('../recentProjects.js').RecentProject) => void,
@@ -11,6 +12,7 @@
   }} */
   let {
     // recentProjects = [],
+    onStartWriting,
     onOpenFile,
     onOpenFolder,
     // onOpenRecent,
@@ -29,6 +31,21 @@
   </header>
 
   <div class="actions">
+    <button type="button" class="action-card" onclick={onStartWriting}>
+      <span class="action-icon" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path
+            d="M12.5 3.5 16.5 7.5 7 17H3v-4l9.5-9.5Z"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linejoin="round"
+          />
+          <path d="M11 5l4 4" stroke="currentColor" stroke-width="1.4" />
+        </svg>
+      </span>
+      <span class="action-label">Start writing</span>
+    </button>
+
     <button type="button" class="action-card" onclick={onOpenFile}>
       <span class="action-icon" aria-hidden="true">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -84,13 +101,13 @@
   -->
 
   <div class="hints">
-    <kbd>⌘O</kbd> open file &nbsp;·&nbsp; <kbd>⌘⇧O</kbd> open folder
+    <kbd>⌘N</kbd> start writing &nbsp;·&nbsp; <kbd>⌘O</kbd> open file &nbsp;·&nbsp; <kbd>⌘⇧O</kbd> open folder
   </div>
 </div>
 
 <style>
   .welcome {
-    width: min(520px, 100%);
+    width: min(580px, 100%);
     display: flex;
     flex-direction: column;
     gap: 28px;

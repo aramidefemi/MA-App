@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -58,7 +61,7 @@ jobs:
             patchelf
 
       - name: Install JS deps
-        run: npm install
+        run: npm ci
 
       - name: Build
         uses: tauri-apps/tauri-action@v0

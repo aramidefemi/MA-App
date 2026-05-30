@@ -1,5 +1,14 @@
 import { commandsCtx, editorViewCtx } from '@milkdown/core'
-import { tooltipFactory, TooltipProvider } from '@milkdown/kit/plugin/tooltip'
+import { posToDOMRect } from '@milkdown/prose'
+import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state'
+import { $prose } from '@milkdown/utils'
+import {
+  autoUpdate,
+  computePosition,
+  flip,
+  offset,
+  shift,
+} from '@floating-ui/dom'
 import {
   blockquoteSchema,
   bulletListSchema,
@@ -20,22 +29,7 @@ import {
   wrapInOrderedListCommand,
 } from '@milkdown/kit/preset/commonmark'
 
-export const formatBubbleTooltip = tooltipFactory('FORMAT_BUBBLE')
-
-/**
- * Register tooltip spec immediately after the ctx slice is injected.
- * @param {(target: HTMLElement, props: object) => () => void} mountToolbar
- */
-export function createFormatBubblePlugin(mountToolbar) {
-  const [specCtx, prosePlugin] = formatBubbleTooltip
-  const wrappedSpecCtx = (ctx) => {
-    const cleanup = specCtx(ctx)
-    configureFormatBubble(ctx, mountToolbar)
-    return cleanup
-  }
-  wrappedSpecCtx.key = specCtx.key
-  return [wrappedSpecCtx, prosePlugin]
-}
+const BUBBLE_KEY = new PluginKey('FORMAT_BUBBLE')
 
 /** @param {import('@milkdown/ctx').Ctx} ctx */
 function getActiveState(ctx) {
@@ -96,58 +90,154 @@ function createActions(ctx) {
   }
 }
 
+/** @param {import('@milkdown/prose/view').EditorView} view */
+function shouldShowBubble(view, bubbleEl) {
+  const { selection, doc } = view.state
+  if (selection.empty || !view.editable) return false
+  if (!(selection instanceof TextSelection)) return false
+
+  const text = doc.textBetween(selection.from, selection.to, ' ')
+  if (!text.trim().length) return false
+
+  const domSel = window.getSelection()
+  const anchorInEditor =
+    domSel?.anchorNode != null && view.dom.contains(domSel.anchorNode)
+  const focusInBubble = bubbleEl.contains(document.activeElement)
+
+  if (!view.hasFocus() && !anchorInEditor && !focusInBubble) return false
+
+  return true
+}
+
 /**
- * @param {import('@milkdown/ctx').Ctx} ctx
+ * Custom ProseMirror bubble plugin — avoids Milkdown tooltipFactory ctx timing.
  * @param {(target: HTMLElement, props: object) => () => void} mountToolbar
  */
-export function configureFormatBubble(ctx, mountToolbar) {
-  ctx.set(formatBubbleTooltip.key, {
-    view: (view) => {
-      const content = document.createElement('div')
-      content.className = 'format-bubble-root'
+export function createFormatBubblePlugin(mountToolbar) {
+  return $prose((ctx) => {
+    /** @type {import('@milkdown/prose/view').EditorView | null} */
+    let editorView = null
+    /** @type {ReturnType<typeof setTimeout> | null} */
+    let debounceTimer = null
+    /** @type {(() => void) | null} */
+    let cleanupAutoUpdate = null
 
-      let active = getActiveState(ctx)
-      const actions = createActions(ctx)
-      let refreshActive = () => {}
+    const content = document.createElement('div')
+    content.className = 'format-bubble-root'
+    content.dataset.show = 'false'
 
-      const destroyMount = mountToolbar(content, {
-        get active() {
-          return active
-        },
-        actions,
-        registerRefresh: (refresh) => {
-          refreshActive = refresh
-        },
-      })
+    let active = {
+      bold: false,
+      italic: false,
+      code: false,
+      link: false,
+      heading: 0,
+      blockquote: false,
+      bulletList: false,
+      orderedList: false,
+    }
+    const actions = createActions(ctx)
+    let refreshActive = () => {}
 
-      const provider = new TooltipProvider({
-        content,
-        debounce: 80,
-        offset: 10,
-        floatingUIOptions: { placement: 'top' },
-        root: document.body,
-      })
+    const hideBubble = () => {
+      if (content.dataset.show === 'false') return
+      content.dataset.show = 'false'
+      cleanupAutoUpdate?.()
+      cleanupAutoUpdate = null
+    }
 
-      provider.onShow = () => {
-        active = getActiveState(ctx)
-        refreshActive()
+    /** @param {import('@milkdown/prose/view').EditorView} view */
+    const syncBubble = (view) => {
+      if (!shouldShowBubble(view, content)) {
+        hideBubble()
+        return
       }
 
-      provider.update(view)
+      active = getActiveState(ctx)
+      refreshActive()
 
-      return {
-        update: (v, prev) => {
-          provider.update(v, prev)
-          if (content.dataset.show === 'true') {
-            active = getActiveState(ctx)
-            refreshActive()
-          }
-        },
-        destroy: () => {
-          provider.destroy()
-          destroyMount()
-        },
+      const { from, to } = view.state.selection
+      const virtualEl = {
+        getBoundingClientRect: () => posToDOMRect(view, from, to),
+        contextElement: view.dom,
       }
-    },
+
+      content.dataset.show = 'true'
+
+      const updatePosition = () => {
+        computePosition(virtualEl, content, {
+          placement: 'top',
+          middleware: [flip(), offset(10), shift({ padding: 8 })],
+        })
+          .then(({ x, y }) => {
+            Object.assign(content.style, {
+              left: `${x}px`,
+              top: `${y}px`,
+            })
+          })
+          .catch(console.error)
+      }
+
+      updatePosition()
+      cleanupAutoUpdate?.()
+      cleanupAutoUpdate = autoUpdate(virtualEl, content, updatePosition)
+    }
+
+    const scheduleUpdate = () => {
+      if (!editorView) return
+      if (debounceTimer) clearTimeout(debounceTimer)
+      debounceTimer = setTimeout(() => syncBubble(editorView), 50)
+    }
+
+    const destroyMount = mountToolbar(content, {
+      get active() {
+        return active
+      },
+      actions,
+      registerRefresh: (refresh) => {
+        refreshActive = refresh
+      },
+    })
+
+    return new Plugin({
+      key: BUBBLE_KEY,
+      props: {
+        handleDOMEvents: {
+          mouseup: (view) => {
+            editorView = view
+            scheduleUpdate()
+            return false
+          },
+          keyup: (view) => {
+            editorView = view
+            scheduleUpdate()
+            return false
+          },
+        },
+      },
+      view(view) {
+        editorView = view
+        document.body.appendChild(content)
+        scheduleUpdate()
+
+        return {
+          update: (nextView, prevState) => {
+            editorView = nextView
+            const { selection } = nextView.state
+            const sameSelection =
+              prevState && prevState.selection.eq(selection)
+            if (!sameSelection) scheduleUpdate()
+          },
+          destroy: () => {
+            if (debounceTimer) clearTimeout(debounceTimer)
+            hideBubble()
+            cleanupAutoUpdate?.()
+            destroyMount()
+            content.remove()
+            editorView = null
+          },
+        }
+      },
+    })
   })
 }

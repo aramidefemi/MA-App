@@ -17,6 +17,9 @@
   import { app } from './lib/app.js'
   // import { addRecentProject, loadRecentProjects, projectName } from './lib/recentProjects.js'
 
+  const UNTITLED_PATH = 'untitled.md'
+  const isUntitled = (path) => path === UNTITLED_PATH
+
   // ─── State ────────────────────────────────────────────────────
   let filePath     = $state(null)
   let content      = $state('')
@@ -128,7 +131,7 @@
   }
 
   async function saveFile() {
-    if (!filePath) {
+    if (!filePath || isUntitled(filePath)) {
       await saveAs()
       return
     }
@@ -169,13 +172,17 @@
     }
   }
 
-  function newFile() {
-    if (isDirty && filePath) saveFile()
-    filePath = null
+  function startWriting() {
+    filePath = UNTITLED_PATH
     content = ''
     savedContent = ''
     showSettings = false
     resetTopbar()
+  }
+
+  function newFile() {
+    if (isDirty && filePath) saveFile()
+    startWriting()
   }
 
   async function newWindow() {
@@ -283,6 +290,7 @@
     <div class="titlebar-drag" data-tauri-drag-region></div>
     <div class="empty">
       <WelcomeScreen
+        onStartWriting={startWriting}
         onOpenFile={openFile}
         onOpenFolder={openFolder}
       />
