@@ -1,0 +1,24 @@
+[package]
+name = "ma"
+version = "0.1.0"
+description = "MA — A markdown editor that opens fast and gets out of the way."
+authors = []
+edition = "2021"
+
+# Optimise release builds for size + speed
+[profile.release]
+panic        = "abort"
+codegen-units = 1
+lto          = true
+opt-level    = "s"
+strip        = true
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri               = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs     = "2"
+serde               = { version = "1", features = ["derive"] }
+serde_json          = "1"

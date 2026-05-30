@@ -1,0 +1,20 @@
+{
+  "name": "MA",
+  "displayName": "間 Ma",
+  "description": "A markdown editor that opens fast and gets out of the way.",
+  "bundleId": "com.ma.app",
+  "crateName": "ma",
+  "npmPackageName": "ma",
+  "emptyState": {
+    "title": "MA",
+    "subtitle": [
+      "Open a markdown file.",
+      "Everything else gets out of the way."
+    ],
+    "logo": "ma"
+  },
+  "fileDialog": {
+    "filterName": "Markdown",
+    "extensions": ["md", "markdown", "txt"]
+  }
+}

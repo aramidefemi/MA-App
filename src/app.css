@@ -1,0 +1,179 @@
+/* ─── Reset ─────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Design tokens ─────────────────────────────────────────── */
+:root {
+  --bg:           #0f0f0f;
+  --surface:      #161616;
+  --border:       #1f1f1f;
+  --text:         #c8c8c8;
+  --text-dim:     #555;
+  --text-heading: #f0f0f0;
+  --accent:       #4ade80;
+  --accent-dim:   rgba(74, 222, 128, 0.15);
+  --danger:       #f87171;
+  --font-ui:      'SF Mono', 'JetBrains Mono', 'Fira Code', monospace;
+  --font-prose:   'Georgia', 'Cambria', 'Times New Roman', serif;
+  --max-w:        680px;
+  --radius:       4px;
+}
+
+/* ─── Base ───────────────────────────────────────────────────── */
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+::-webkit-scrollbar       { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+
+/* ─── Selection ──────────────────────────────────────────────── */
+::selection {
+  background: var(--accent-dim);
+  color: var(--text-heading);
+}
+
+/* ─── Milkdown / ProseMirror ────────────────────────────────── */
+.milkdown,
+.milkdown * {
+  user-select: text;
+}
+
+.milkdown {
+  height: 100%;
+  outline: none;
+}
+
+.milkdown .ProseMirror {
+  outline: none;
+  caret-color: var(--accent);
+  min-height: 100%;
+  padding: 80px 40px 160px;
+  max-width: var(--max-w);
+  margin: 0 auto;
+  font-family: var(--font-prose);
+  font-size: 17px;
+  line-height: 1.75;
+  color: var(--text);
+}
+
+/* headings */
+.milkdown h1 {
+  font-family: var(--font-ui);
+  font-size: 1.9em;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-heading);
+  margin-bottom: 0.6em;
+  margin-top: 1.4em;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.3em;
+}
+.milkdown h2 {
+  font-family: var(--font-ui);
+  font-size: 1.35em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text-heading);
+  margin-bottom: 0.5em;
+  margin-top: 1.2em;
+}
+.milkdown h3 {
+  font-family: var(--font-ui);
+  font-size: 1.1em;
+  font-weight: 600;
+  color: #aaa;
+  margin-bottom: 0.4em;
+  margin-top: 1em;
+}
+
+/* paragraphs */
+.milkdown p {
+  margin-bottom: 1em;
+}
+
+/* inline */
+.milkdown strong { color: var(--text-heading); font-weight: 700; }
+.milkdown em     { color: #aaa; font-style: italic; }
+.milkdown a      { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(74,222,128,0.3); }
+.milkdown a:hover { border-color: var(--accent); }
+
+/* code */
+.milkdown code {
+  font-family: var(--font-ui);
+  font-size: 0.85em;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  padding: 1px 5px;
+  border-radius: var(--radius);
+  color: #7dd3fc;
+}
+.milkdown pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 1em 1.2em;
+  margin-bottom: 1.2em;
+  overflow-x: auto;
+}
+.milkdown pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.9em;
+  color: var(--text);
+}
+
+/* blockquote */
+.milkdown blockquote {
+  border-left: 2px solid var(--accent);
+  padding-left: 1.2em;
+  color: var(--text-dim);
+  font-style: italic;
+  margin-bottom: 1em;
+}
+
+/* lists */
+.milkdown ul,
+.milkdown ol {
+  padding-left: 1.5em;
+  margin-bottom: 1em;
+}
+.milkdown li {
+  margin-bottom: 0.3em;
+  line-height: 1.7;
+}
+
+/* hr */
+.milkdown hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 2em 0;
+}
+
+/* placeholder */
+.milkdown .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: var(--text-dim);
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
