@@ -51,6 +51,22 @@ html, body {
   color: var(--text-heading);
 }
 
+/* ─── Format bubble toolbar ─────────────────────────────────── */
+.format-bubble-root {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.format-bubble-root[data-show='true'] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 /* ─── Milkdown / ProseMirror ────────────────────────────────── */
 .milkdown,
 .milkdown * {

@@ -4,15 +4,11 @@
      * Parses headings from markdown content, renders hierarchy,
      * scrolls to heading on click.
      */
-    import { getDocumentStats, readingMinutes } from '../documentStats.js'
-
     let { content = '', onClose } = $props()
 
     // ─── Parse headings from markdown ──────────────────────
 
     let headings = $derived(parseHeadings(content))
-    let stats    = $derived(getDocumentStats(content))
-    let readMins = $derived(readingMinutes(stats.readingSeconds))
   
     function parseHeadings(markdown) {
       return markdown
@@ -63,7 +59,7 @@
       {#if headings.length === 0}
         <p class="empty">No headings yet</p>
       {:else}
-        {#each headings as h}
+        {#each headings as h (h.text + h.index)}
           <button
             class="heading-item"
             style={levelStyle(h.level)}
@@ -74,12 +70,6 @@
           </button>
         {/each}
       {/if}
-    </div>
-  
-    <div class="stats">
-      <span>{stats.words.toLocaleString()} words</span>
-      <span class="divider">·</span>
-      <span>{readMins} min read</span>
     </div>
   </div>
   
@@ -94,7 +84,7 @@
     /* ─── Panel ────────────────────────────────────── */
     .panel {
       position: fixed;
-      top: 46px;      /* below titlebar */
+      top: 68px;      /* below floating outline toggle */
       right: 12px;
       width: 240px;
       max-height: calc(100vh - 60px);
@@ -193,19 +183,4 @@
       padding: 16px 12px;
       text-align: center;
     }
-  
-    /* ─── Stats ─────────────────────────────────────── */
-    .stats {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      padding: 8px 12px;
-      border-top: 1px solid #222;
-      font-family: var(--font-ui);
-      font-size: 10px;
-      color: #3a3a3a;
-      flex-shrink: 0;
-    }
-  
-    .divider { color: #2a2a2a; }
   </style>

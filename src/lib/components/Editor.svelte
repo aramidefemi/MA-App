@@ -1,8 +1,10 @@
 <script>
-  import { onMount, onDestroy } from 'svelte'
+  import { mount, unmount, onMount } from 'svelte'
   import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core'
   import { commonmark } from '@milkdown/kit/preset/commonmark'
   import { listener, listenerCtx } from '@milkdown/plugin-listener'
+  import FormatBubbleToolbar from './FormatBubbleToolbar.svelte'
+  import { createFormatBubblePlugin } from '../editor/formatBubble.js'
 
   /**
    * @type {{ initialContent: string, onContentChange: (md: string) => void }}
@@ -10,25 +12,45 @@
   let { initialContent = '', onContentChange } = $props()
 
   let containerEl = $state()
+  /** @type {import('@milkdown/core').Editor | undefined} */
   let editor
 
-  onMount(async () => {
-    editor = await Editor.make()
-      .config((ctx) => {
-        ctx.set(rootCtx, containerEl)
-        ctx.set(defaultValueCtx, initialContent)
+  onMount(() => {
+    const root = containerEl
+    let disposed = false
 
-        ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-          onContentChange?.(markdown)
+    ;(async () => {
+      const instance = await Editor.make()
+        .config((ctx) => {
+          ctx.set(rootCtx, root)
+          ctx.set(defaultValueCtx, initialContent)
+
+          ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
+            onContentChange?.(markdown)
+          })
         })
-      })
-      .use(commonmark)
-      .use(listener)
-      .create()
-  })
+        .use(commonmark)
+        .use(listener)
+        .use(
+          createFormatBubblePlugin((target, props) => {
+            const instance = mount(FormatBubbleToolbar, { target, props })
+            return () => unmount(instance)
+          })
+        )
+        .create()
 
-  onDestroy(() => {
-    editor?.destroy()
+      if (disposed) {
+        instance.destroy()
+        return
+      }
+      editor = instance
+    })()
+
+    return () => {
+      disposed = true
+      editor?.destroy()
+      editor = undefined
+    }
   })
 </script>
 

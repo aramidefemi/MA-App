@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Default MA capabilities",
-  "windows": ["main"],
+  "windows": ["main", "*"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -9,6 +9,10 @@
     "dialog:allow-save",
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
-    "fs:allow-write-text-file"
+    "fs:allow-write-text-file",
+    "fs:allow-appdata-read-recursive",
+    "fs:allow-appdata-write-recursive",
+    "fs:allow-exists",
+    "fs:allow-mkdir"
   ]
 }
