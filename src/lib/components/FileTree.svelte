@@ -4,6 +4,16 @@
   let { rootPath = '', activeFile = '', onSelect } = $props()
   let entries = $state([])
   let expanded = $state(new Set())
+  let refreshToken = $state(0)
+  let lastRootPath = $state('')
+
+  export function refresh() {
+    refreshToken++
+  }
+
+  export function collapseAll() {
+    expanded = new Set()
+  }
   const visibleEntries = $derived.by(() => {
     const visible = []
     const open = []
@@ -19,11 +29,18 @@
 
   $effect(() => {
     const path = rootPath
+    const _refresh = refreshToken
     let cancelled = false
 
-    entries = []
-    expanded = new Set()
-    if (!path) return
+    if (path !== lastRootPath) {
+      expanded = new Set()
+      lastRootPath = path
+    }
+
+    if (!path) {
+      entries = []
+      return
+    }
 
     collectEntries(path, 0).then((next) => {
       if (!cancelled) entries = next

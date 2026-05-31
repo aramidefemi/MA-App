@@ -6,10 +6,13 @@
   import { setupAppMenu } from './lib/appMenu.js'
   import Editor from './lib/components/Editor.svelte'
   import FileTree from './lib/components/FileTree.svelte'
+  import SidebarFileToolbar from './lib/components/SidebarFileToolbar.svelte'
+  import { createFolderInWorkspace, createMarkdownInFolder } from './lib/workspaceFiles.js'
   import OutlinePanel from './lib/components/OutlinePanel.svelte'
   import WelcomeScreen from './lib/components/WelcomeScreen.svelte'
   import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
-  import Settings from './lib/components/Settings.svelte'
+  import SettingsPanel from './lib/components/SettingsPanel.svelte'
+  import { settings } from './lib/modules/settings'
   import SidebarToggle from './lib/components/SidebarToggle.svelte'
   import ResearchPanel from './lib/components/ResearchPanel.svelte'
   import { research } from './lib/modules/research'
@@ -19,6 +22,8 @@
   import { aiLog } from './lib/debug/aiFlowLog.js'
   import { initUsageTracking } from './lib/modules/usage'
   import { session, persistSession } from './lib/modules/session'
+  import { wordGoal } from './lib/modules/wordGoal'
+  import WordGoalBar from './lib/components/WordGoalBar.svelte'
   // import { addRecentProject, loadRecentProjects, projectName } from './lib/recentProjects.js'
 
   // ─── State ────────────────────────────────────────────────────
@@ -37,6 +42,7 @@
   let researchSessionId = $state(0)
   // let recentProjects  = $state([])
   let homePath        = $state('')
+  let fileTree        = $state(null)
 
   $effect(() => {
     topbarDismissed = ui.topbarDismissed
@@ -91,6 +97,7 @@
     workspace.showOutline
     research.showResearch
     session.scrollTop
+    session.typewriterScroll
     persistSession()
   })
 
@@ -105,6 +112,7 @@
     if (path !== lastPersistedFilePath) {
       lastPersistedFilePath = path
       session.setScrollTop(0)
+      wordGoal.reset()
     }
   })
 
@@ -260,6 +268,20 @@
       e.preventDefault()
       workspace.toggleOutline()
     }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 't') {
+      e.preventDefault()
+      session.toggleTypewriterScroll()
+      persistSession()
+    }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {
+      e.preventDefault()
+      settings.toggleTheme()
+    }
+    if (mod && e.key === ',') {
+      e.preventDefault()
+      if (showSettings) workspace.closeSettings()
+      else workspace.openSettings()
+    }
     if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
       e.preventDefault()
       // ⌘E — explain selected text (Agent 3b wires the actual call)
@@ -272,6 +294,35 @@
 
   function toggleSidebar() {
     workspace.toggleSidebar()
+  }
+
+  async function createWorkspaceFile() {
+    if (!folderPath) return
+    try {
+      const path = await createMarkdownInFolder(folderPath)
+      fileTree?.refresh()
+      await openFileFromTree(path)
+    } catch (e) {
+      console.error('New file failed:', e)
+    }
+  }
+
+  async function createWorkspaceFolder() {
+    if (!folderPath) return
+    try {
+      await createFolderInWorkspace(folderPath)
+      fileTree?.refresh()
+    } catch (e) {
+      console.error('New folder failed:', e)
+    }
+  }
+
+  function refreshFileTree() {
+    fileTree?.refresh()
+  }
+
+  function collapseFileTree() {
+    fileTree?.collapseAll()
   }
 
   // ─── Topbar distraction-free mode ─────────────────────────────
@@ -292,6 +343,7 @@
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="app">
+  <WordGoalBar />
   <!-- ─── Welcome ─────────────────────────────────────── -->
   {#if showWelcome}
     <div class="titlebar-drag" data-tauri-drag-region></div>
@@ -315,7 +367,14 @@
                 title="Hide sidebar (⌘B)"
               />
             </div>
+            <SidebarFileToolbar
+              onNewFile={createWorkspaceFile}
+              onNewFolder={createWorkspaceFolder}
+              onRefresh={refreshFileTree}
+              onCollapse={collapseFileTree}
+            />
             <FileTree
+              bind:this={fileTree}
               rootPath={folderPath}
               activeFile={filePath}
               onSelect={openFileFromTree}
@@ -359,6 +418,28 @@
                     {:else if saveStatus === 'error'}error
                     {/if}
                   </span>
+                  <button
+                    type="button"
+                    class="topbar-btn"
+                    onclick={() => workspace.openSettings()}
+                    title="Settings (⌘,)"
+                    aria-label="Settings"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <path
+                        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
+                        stroke="currentColor"
+                        stroke-width="1.75"
+                      />
+                      <path
+                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
+                        stroke="currentColor"
+                        stroke-width="1.75"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
                 </div>
               </div>
             </header>
@@ -402,11 +483,6 @@
                 <span class="folder-prompt-path">{ui.formatDisplayPath(folderPath)}</span>
               </div>
             {/if}
-            {#if showSettings}
-              <div class="settings-overlay">
-                <Settings onBack={() => workspace.closeSettings()} />
-              </div>
-            {/if}
           </div>
         </div>
 
@@ -422,6 +498,10 @@
       <OutlinePanel />
     {/if}
     </div>
+  {/if}
+
+  {#if showSettings}
+    <SettingsPanel onClose={() => workspace.closeSettings()} />
   {/if}
 
 </div>
@@ -604,6 +684,24 @@
   }
   .save-indicator.visible { opacity: 1; }
 
+  .topbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px;
+    background: none;
+    border: none;
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .topbar-btn:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--surface) 70%, var(--text) 8%);
+  }
+
   .outline-float {
     position: absolute;
     border: none;
@@ -685,15 +783,6 @@
     flex-direction: column;
     position: relative;
     min-height: 0;
-  }
-
-  .settings-overlay {
-    position: absolute;
-    inset: 0;
-    z-index: 20;
-    display: flex;
-    flex-direction: column;
-    background: var(--bg);
   }
 
   /* ─── Empty state ─────────────────────────────────────── */

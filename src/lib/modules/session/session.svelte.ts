@@ -13,6 +13,7 @@ import {
 } from './session'
 
 let scrollTop = $state(0)
+let typewriterScroll = $state(true)
 let ready = $state(false)
 let restoring = false
 let persistEnabled = false
@@ -21,6 +22,7 @@ export function snapshot(): SessionState {
   return buildSessionSnapshot({
     filePath: document.filePath,
     scrollTop,
+    typewriterScroll,
     showSidebar: workspace.showSidebar,
     showOutline: workspace.showOutline,
     showResearch: research.showResearch,
@@ -56,7 +58,12 @@ async function pathExists(path: string): Promise<boolean> {
 }
 
 async function resolveForRestore(raw: SessionState): Promise<SessionState> {
-  const resolved = { ...DEFAULT_SESSION, showOutline: raw.showOutline, showResearch: raw.showResearch }
+  const resolved = {
+    ...DEFAULT_SESSION,
+    showOutline: raw.showOutline,
+    showResearch: raw.showResearch,
+    typewriterScroll: raw.typewriterScroll,
+  }
 
   if (raw.folderPath && (await pathExists(raw.folderPath))) {
     resolved.folderPath = raw.folderPath
@@ -81,6 +88,7 @@ async function applySession(state: SessionState): Promise<void> {
   workspace.restorePanels(state.showOutline)
   research.restorePanel(state.showResearch)
   scrollTop = state.scrollTop
+  typewriterScroll = state.typewriterScroll
 }
 
 export async function initSession(shouldPersist: boolean): Promise<void> {
@@ -101,6 +109,14 @@ function setScrollTop(value: number) {
   scrollTop = Math.max(0, value)
 }
 
+function setTypewriterScroll(value: boolean) {
+  typewriterScroll = value
+}
+
+function toggleTypewriterScroll() {
+  typewriterScroll = !typewriterScroll
+}
+
 export function persistSession(): void {
   if (!ready || restoring || !persistEnabled) return
   void writeSession(snapshot())
@@ -108,7 +124,10 @@ export function persistSession(): void {
 
 export const session = {
   get scrollTop() { return scrollTop },
+  get typewriterScroll() { return typewriterScroll },
   get ready() { return ready },
   setScrollTop,
+  setTypewriterScroll,
+  toggleTypewriterScroll,
   initSession,
 }

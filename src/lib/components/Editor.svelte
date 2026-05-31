@@ -6,6 +6,7 @@
   import FormatBubbleToolbar from './FormatBubbleToolbar.svelte'
   import { createFormatBubblePlugin } from '../editor/formatBubble.js'
   import { createImageDisplayPlugin, createImageDropPlugin } from '../editor/imageDrop.js'
+  import { createTypewriterScrollPlugin } from '../editor/typewriterScroll.js'
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
   import { document } from '../modules/document'
   import { session } from '../modules/session'
@@ -97,6 +98,7 @@
           getDocumentPath: () => document.filePath,
           onSaveRequired: () => document.saveAs(),
         }))
+        .use(createTypewriterScrollPlugin())
         .create()
 
       if (disposed) {

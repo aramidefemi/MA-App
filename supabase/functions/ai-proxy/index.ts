@@ -1,8 +1,8 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2'
 
 const NVIDIA_BASE = 'https://integrate.api.nvidia.com/v1'
-const DEFAULT_MODEL = 'nvidia/llama-3.3-nemotron-super-49b-v1'
-const DEFAULT_MAX_TOKENS = 600
+const DEFAULT_MODEL = 'nvidia/llama-3.1-nemotron-nano-8b-v1'
+const DEFAULT_MAX_TOKENS = 450
 const DAILY_LIMIT = 50
 const MIN_ANON_ID_LEN = 8
 
@@ -56,11 +56,15 @@ function parseBody(raw: unknown): ProxyBody | null {
   return body
 }
 
+let serviceClientInstance: ReturnType<typeof createClient> | null = null
+
 function serviceClient() {
+  if (serviceClientInstance) return serviceClientInstance
   const url = Deno.env.get('SUPABASE_URL')
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
   if (!url || !key) throw new Error('Missing Supabase env')
-  return createClient(url, key, { auth: { persistSession: false } })
+  serviceClientInstance = createClient(url, key, { auth: { persistSession: false } })
+  return serviceClientInstance
 }
 
 async function consumeQuota(anonymousId: string): Promise<{

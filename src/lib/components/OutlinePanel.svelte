@@ -6,6 +6,7 @@
      */
     import { document as doc } from '../modules/document'
     import { workspace } from '../modules/workspace'
+    import { suspendTypewriterScroll } from '../editor/typewriterScroll.js'
 
     // ─── Parse headings from markdown ──────────────────────
 
@@ -25,6 +26,7 @@
   
     // ─── Scroll to heading in editor ───────────────────────
     function jumpTo(text) {
+      suspendTypewriterScroll()
       const selectors = 'h1, h2, h3, h4'
       const nodes = globalThis.document.querySelectorAll(`.milkdown .ProseMirror ${selectors}`)
       for (const node of nodes) {
@@ -89,10 +91,10 @@
       right: 12px;
       width: 240px;
       max-height: calc(100vh - 60px);
-      background: #1c1c1c;
-      border: 1px solid #2a2a2a;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 6px;
-      box-shadow: 0 8px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4);
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45);
       z-index: 20;
       display: flex;
       flex-direction: column;
@@ -111,7 +113,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 10px 12px 8px;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
   
@@ -119,14 +121,14 @@
       font-family: var(--font-ui);
       font-size: 9px;
       letter-spacing: 0.12em;
-      color: #444;
+      color: var(--text-dim);
       text-transform: uppercase;
     }
   
     .close-btn {
       background: none;
       border: none;
-      color: #444;
+      color: var(--text-dim);
       font-size: 10px;
       cursor: pointer;
       padding: 2px 4px;
@@ -134,7 +136,7 @@
       transition: color 0.1s;
       line-height: 1;
     }
-    .close-btn:hover { color: #888; }
+    .close-btn:hover { color: var(--text); }
   
     /* ─── Headings list ─────────────────────────────── */
     .headings {
@@ -159,13 +161,13 @@
       line-height: 1.4;
     }
     .heading-item:hover {
-      background: #242424;
+      background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%);
       color: var(--text-heading);
     }
   
     .h-level {
       font-size: 8px;
-      color: #333;
+      color: var(--text-dim);
       flex-shrink: 0;
       letter-spacing: 0.05em;
       width: 14px;
@@ -180,7 +182,7 @@
     .empty {
       font-family: var(--font-ui);
       font-size: 11px;
-      color: #444;
+      color: var(--text-dim);
       padding: 16px 12px;
       text-align: center;
     }

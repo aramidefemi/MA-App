@@ -1,8 +1,12 @@
 import { hasApiKey } from './keys.js'
 import { getAnonymousId } from '../modules/usage/anonymousId.js'
 
-const MODEL = 'nvidia/llama-3.3-nemotron-super-49b-v1'
-const MAX_TOKENS = 600
+/** Nano 8B — much faster TTFT than the 49B super model on free/shared keys. */
+const DEFAULT_MODEL = 'nvidia/llama-3.1-nemotron-nano-8b-v1'
+const MODEL = import.meta.env.VITE_AI_MODEL?.trim() || DEFAULT_MODEL
+const MAX_TOKENS = 450
+/** Cap document context so prompts stay small (major latency win on large files). */
+const MAX_DOC_CHARS = 6_000
 
 const PROMPTS = {
   explain: `You are a focused writing assistant inside a markdown editor 
@@ -27,16 +31,24 @@ Rules:
 - Never start with "Certainly" or "Of course" or "Great question".`
 }
 
-/** @param {'explain'|'ask'} mode @param {string} [documentText] */
-function buildSystemPrompt(mode, documentText) {
+/** @param {'explain'|'ask'} mode @param {string} [documentText] @param {string} [context] */
+function buildSystemPrompt(mode, documentText, context) {
+  if (mode === 'explain' && context?.trim()) return PROMPTS[mode]
+
   const doc = documentText?.trim()
   if (!doc) return PROMPTS[mode]
+
+  const capped =
+    doc.length > MAX_DOC_CHARS ? doc.slice(-MAX_DOC_CHARS) : doc
+  const truncatedNote =
+    doc.length > MAX_DOC_CHARS ? '\n(Document excerpt: end of file only.)' : ''
+
   return `${PROMPTS[mode]}
 
 The user's current document:
 ---
-${doc}
----`
+${capped}
+---${truncatedNote}`
 }
 
 /** @param {'explain'|'ask'} mode @param {string} input @param {string} [context] @param {string} [documentText] */
@@ -45,7 +57,7 @@ function buildMessages(mode, input, context, documentText) {
     ? `Context from my document:\n"${context}"\n\n${input}`
     : input
   return [
-    { role: 'system', content: buildSystemPrompt(mode, documentText) },
+    { role: 'system', content: buildSystemPrompt(mode, documentText, context) },
     { role: 'user', content: userMessage }
   ]
 }
@@ -103,8 +115,33 @@ async function consumeSseStream(body, onToken) {
   }
 }
 
-/** @param {object[]} messages @param {{ onToken: function, onDone: function, onError: function }} handlers */
-async function streamViaProxy(messages, { onToken, onDone, onError }) {
+/**
+ * @param {object[]} messages
+ * @param {{
+ *   onToken: function,
+ *   onDone: function,
+ *   onError: function,
+ *   onFirstToken?: function,
+ * }} handlers
+ */
+async function streamViaProxy(messages, { onToken, onDone, onError, onFirstToken }) {
+  const startedAt = performance.now()
+  let firstTokenAt = null
+
+  const emitToken = (token) => {
+    if (token && firstTokenAt == null) {
+      firstTokenAt = performance.now()
+      onFirstToken?.(Math.round(firstTokenAt - startedAt))
+    }
+    onToken(token)
+  }
+
+  const finish = () => {
+    const totalMs = Math.round(performance.now() - startedAt)
+    const ttftMs =
+      firstTokenAt != null ? Math.round(firstTokenAt - startedAt) : totalMs
+    onDone({ totalMs, ttftMs })
+  }
   let config
   try {
     config = getProxyConfig()
@@ -167,8 +204,8 @@ async function streamViaProxy(messages, { onToken, onDone, onError }) {
   }
 
   try {
-    await consumeSseStream(res.body, onToken)
-    onDone()
+    await consumeSseStream(res.body, emitToken)
+    finish()
   } catch (e) {
     onError(e instanceof Error ? e : new Error(String(e)))
   }
@@ -183,8 +220,9 @@ async function streamViaProxy(messages, { onToken, onDone, onError }) {
  * @param {string} [options.context]
  * @param {string} [options.documentText]
  * @param {function} options.onToken
- * @param {function} options.onDone
+ * @param {function(options: { totalMs: number, ttftMs: number }): void} options.onDone
  * @param {function} options.onError
+ * @param {function(number): void} [options.onFirstToken] ttft in ms
  */
 export async function streamResponse({
   mode = 'explain',
@@ -193,10 +231,17 @@ export async function streamResponse({
   documentText,
   onToken,
   onDone,
-  onError
+  onError,
+  onFirstToken
 }) {
   const messages = buildMessages(mode, input, context, documentText)
-  await streamViaProxy(messages, { onToken, onDone, onError })
+  await streamViaProxy(messages, { onToken, onDone, onError, onFirstToken })
+}
+
+/** @param {number} ms */
+export function formatAiTiming(ms) {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
 }
 
 export async function hasKey() {

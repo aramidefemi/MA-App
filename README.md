@@ -2,9 +2,11 @@
 
 A markdown editor that opens fast and gets out of the way.
 
----
+***
 
 ## Install
+
+Jijjij
 
 Go to the [latest release](../../releases/latest) and download the file for your platform:
 
@@ -15,15 +17,15 @@ Go to the [latest release](../../releases/latest) and download the file for your
 | Windows | `Ma_VERSION_x64-setup.exe` |
 | Linux | `Ma_VERSION_amd64.AppImage` |
 
-**macOS:** Open the `.dmg`, drag Ma to Applications.  
-**Windows:** Run the `.exe` installer.  
+**macOS:** Open the `.dmg`, drag Ma to Applications.\
+**Windows:** Run the `.exe` installer.\
 **Linux:** Make the `.AppImage` executable and run it — `chmod +x Ma*.AppImage && ./Ma*.AppImage`
 
 > macOS will warn about an unverified developer the first time.
 > Right-click the app → Open → Open anyway.
 > This goes away once the app is code-signed.
 
----
+***
 
 ## Why
 
@@ -36,7 +38,7 @@ They're so busy being helpful that you can't think.
 Ma doesn't do that. The blank canvas is the product.
 What we didn't add is the feature.
 
----
+***
 
 ## Who actually uses this
 
@@ -50,7 +52,7 @@ someone left open, not an application you launched.
 Writers and students with ADHD. The moment the UI asks for your attention
 you've lost the thread. Ma never asks.
 
----
+***
 
 ## The AI plan
 
@@ -58,7 +60,7 @@ Not "add AI and break the philosophy." The goal is an AI that waits to
 be asked, answers inline, and disappears. Still Ma.
 Harder to ship than it sounds — which is why it's V2.
 
----
+***
 
 ## Shortcuts
 
@@ -69,9 +71,10 @@ Harder to ship than it sounds — which is why it's V2.
 | `⌘S` | Save |
 | `⌘B` | Toggle sidebar |
 | `⌘\` | Toggle outline panel |
+| `⌘⇧T` | Toggle typewriter scrolling |
 | `Esc` | Dismiss panels |
 
----
+***
 
 ## Build from source
 
@@ -84,7 +87,7 @@ npm run tauri dev     # dev mode — opens desktop window
 npm run tauri build   # production build for your current OS
 ```
 
----
+***
 
 ## V1 scope
 
@@ -96,6 +99,6 @@ Open a `.md` file or folder. Edit inline — `##` becomes a heading,
 Slash commands → inline AI. Ghost text on pause. Light mode. Multiple tabs.
 Full roadmap in `ROADMAP.md`.
 
----
+***
 
 *Tauri 2 · Svelte 5 · Milkdown 7*

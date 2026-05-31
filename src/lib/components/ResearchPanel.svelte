@@ -1,6 +1,6 @@
 <script>
   import { onMount } from 'svelte'
-  import { streamResponse } from '../services/ai.js'
+  import { streamResponse, formatAiTiming } from '../services/ai.js'
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
   import { research } from '../modules/research'
   import { document } from '../modules/document'
@@ -22,6 +22,13 @@
   let draftInput   = $state('')
   let chatInputEl  = $state(null)
   let submittedContext = $state('')
+  let deepThinking   = $state(false)
+  /** @type {{ totalMs: number, ttftMs: number } | null} */
+  let timing         = $state(null)
+
+  const DEEP_THINKING_MS = 2_500
+  /** @type {ReturnType<typeof setTimeout> | null} */
+  let deepThinkingTimer = null
 
   const maxWidth = () =>
     Math.max(
@@ -71,14 +78,32 @@
     window.addEventListener('pointerup', onUp)
   }
 
+  const CHAT_INPUT_MIN = 72
+  const CHAT_INPUT_MAX = 160
+
   function resizeChatInput(el = chatInputEl) {
     if (!el) return
     el.style.height = 'auto'
-    el.style.height = `${el.scrollHeight}px`
+    el.style.height = `${Math.min(CHAT_INPUT_MAX, Math.max(CHAT_INPUT_MIN, el.scrollHeight))}px`
   }
 
   function resetChatInputHeight() {
     if (chatInputEl) chatInputEl.style.height = 'auto'
+  }
+
+  function clearDeepThinkingTimer() {
+    if (deepThinkingTimer != null) {
+      clearTimeout(deepThinkingTimer)
+      deepThinkingTimer = null
+    }
+  }
+
+  function scheduleDeepThinking() {
+    clearDeepThinkingTimer()
+    deepThinking = false
+    deepThinkingTimer = setTimeout(() => {
+      if (isStreaming && !response) deepThinking = true
+    }, DEEP_THINKING_MS)
   }
 
   async function startStream(query, isCancelled, mode = 'explain', context) {
@@ -90,29 +115,43 @@
       contextLength: context?.length ?? 0,
       documentLength: document.content.length,
     })
-    response    = ''
-    isStreaming = true
-    isDone      = false
-    error       = null
+    response     = ''
+    isStreaming  = true
+    isDone       = false
+    error        = null
+    timing       = null
+    deepThinking = false
+    scheduleDeepThinking()
 
     await streamResponse({
       mode,
       input: query,
       context,
       documentText: document.content,
+      onFirstToken: () => {
+        if (!isCancelled()) {
+          clearDeepThinkingTimer()
+          deepThinking = false
+        }
+      },
       onToken: (token) => {
         if (!isCancelled()) response += token
       },
-      onDone: () => {
+      onDone: (stats) => {
         if (!isCancelled()) {
-          aiLog('ResearchPanel.startStream onDone', { mode })
+          clearDeepThinkingTimer()
+          deepThinking = false
+          aiLog('ResearchPanel.startStream onDone', { mode, ...stats })
           isStreaming = false
           isDone = true
+          timing = stats
           if (mode === 'explain') initialDone = true
         }
       },
       onError: (e) => {
         if (!isCancelled()) {
+          clearDeepThinkingTimer()
+          deepThinking = false
           aiWarn('ResearchPanel.startStream onError', {
             mode,
             message: e.message,
@@ -186,12 +225,23 @@
 
       {:else if response}
         <p class="response-text">{response}{#if isStreaming}<span class="cursor">▌</span>{/if}</p>
+        {#if timing && isDone}
+          <p class="response-timing" aria-live="polite">
+            {formatAiTiming(timing.totalMs)}
+            {#if timing.ttftMs < timing.totalMs}
+              <span class="timing-detail"> · first words {formatAiTiming(timing.ttftMs)}</span>
+            {/if}
+          </p>
+        {/if}
 
       {:else if isStreaming}
-        <div class="thinking">
+        <div class="thinking" aria-busy="true" aria-label={deepThinking ? 'Thinking' : 'Loading'}>
           <span class="dot"></span>
           <span class="dot"></span>
           <span class="dot"></span>
+          {#if deepThinking}
+            <span class="thinking-label">thinking</span>
+          {/if}
         </div>
 
       {:else}
@@ -212,15 +262,28 @@
   </div>
 
   <div class="chat-input-wrap">
-    <textarea
-      bind:this={chatInputEl}
-      bind:value={draftInput}
-      class="chat-input"
-      placeholder={initialDone ? 'ask a follow-up...' : 'add context or a question...'}
-      rows="1"
-      oninput={() => resizeChatInput()}
-      onkeydown={onChatKeydown}
-    ></textarea>
+    <div class="chat-input-box">
+      <textarea
+        bind:this={chatInputEl}
+        bind:value={draftInput}
+        class="chat-input"
+        placeholder={initialDone ? 'ask a follow-up...' : 'add context or a question...'}
+        rows="3"
+        oninput={() => resizeChatInput()}
+        onkeydown={onChatKeydown}
+      ></textarea>
+      <button
+        type="button"
+        class="send-btn"
+        aria-label="Send message"
+        disabled={!draftInput.trim() || isStreaming}
+        onclick={submitChat}
+      >
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+          <path d="M7 2.5V11.5M7 2.5L3.5 6M7 2.5L10.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+    </div>
   </div>
 </div>
 
@@ -346,10 +409,38 @@
     50% { opacity: 0; }
   }
 
+  .response-timing {
+    margin: 10px 0 0;
+    font-family: var(--font-ui);
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.04em;
+  }
+
+  .timing-detail {
+    opacity: 0.85;
+  }
+
   .thinking {
     display: flex;
+    align-items: center;
     gap: 5px;
     padding: 8px 0;
+  }
+
+  .thinking-label {
+    margin-left: 6px;
+    font-family: var(--font-ui);
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+    font-style: italic;
+    animation: thinking-fade 0.4s ease-out;
+  }
+
+  @keyframes thinking-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
 
   .dot {
@@ -413,20 +504,36 @@
     padding: 10px 14px;
   }
 
-  .chat-input {
-    width: 100%;
-    box-sizing: border-box;
+  .chat-input-box {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
     background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    border: 1px solid #555;
+    border-radius: 10px;
+    padding: 8px 8px 8px 12px;
+    transition: border-color 0.15s;
+  }
+
+  .chat-input-box:focus-within {
+    border-color: #888;
+  }
+
+  .chat-input {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    background: transparent;
+    border: none;
     color: var(--text);
     font-family: var(--font-ui);
     font-size: 11px;
     line-height: 1.5;
-    padding: 8px 10px;
+    padding: 2px 0;
     resize: none;
-    overflow: hidden;
-    min-height: 36px;
+    overflow-y: auto;
+    min-height: 72px;
+    max-height: 160px;
     outline: none;
   }
 
@@ -434,7 +541,27 @@
     color: var(--text-dim);
   }
 
-  .chat-input:focus {
-    border-color: rgba(74, 222, 128, 0.4);
+  .send-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 50%;
+    background: #d4d4d4;
+    color: #1a1a1a;
+    cursor: pointer;
+    transition: opacity 0.15s, background 0.15s;
+  }
+
+  .send-btn:hover:not(:disabled) {
+    background: #e8e8e8;
+  }
+
+  .send-btn:disabled {
+    opacity: 0.35;
+    cursor: default;
   }
 </style>
