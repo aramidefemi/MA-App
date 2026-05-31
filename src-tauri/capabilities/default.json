@@ -10,9 +10,15 @@
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
+    "fs:allow-write-file",
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
     "fs:allow-exists",
-    "fs:allow-mkdir"
+    "fs:allow-mkdir",
+    "store:allow-load",
+    "store:allow-get",
+    "store:allow-set",
+    "store:allow-save",
+    "store:allow-delete"
   ]
 }

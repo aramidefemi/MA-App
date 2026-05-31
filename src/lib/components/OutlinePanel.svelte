@@ -4,11 +4,12 @@
      * Parses headings from markdown content, renders hierarchy,
      * scrolls to heading on click.
      */
-    let { content = '', onClose } = $props()
+    import { document as doc } from '../modules/document'
+    import { workspace } from '../modules/workspace'
 
     // ─── Parse headings from markdown ──────────────────────
 
-    let headings = $derived(parseHeadings(content))
+    let headings = $derived(parseHeadings(doc.content))
   
     function parseHeadings(markdown) {
       return markdown
@@ -25,14 +26,14 @@
     // ─── Scroll to heading in editor ───────────────────────
     function jumpTo(text) {
       const selectors = 'h1, h2, h3, h4'
-      const nodes = document.querySelectorAll(`.milkdown .ProseMirror ${selectors}`)
+      const nodes = globalThis.document.querySelectorAll(`.milkdown .ProseMirror ${selectors}`)
       for (const node of nodes) {
         if (node.textContent.trim() === text) {
           node.scrollIntoView({ behavior: 'smooth', block: 'start' })
           break
         }
       }
-      onClose?.()
+      workspace.closeOutline()
     }
   
     // indent + style by heading level
@@ -46,13 +47,13 @@
   </script>
   
   <!-- backdrop -->
-  <div class="backdrop" onclick={onClose} role="none"></div>
+  <div class="backdrop" onclick={() => workspace.closeOutline()} role="none"></div>
   
   <!-- panel -->
   <div class="panel" role="dialog" aria-label="Document outline">
     <div class="panel-header">
       <span class="panel-title">outline</span>
-      <button class="close-btn" onclick={onClose} aria-label="Close outline">✕</button>
+      <button class="close-btn" onclick={() => workspace.closeOutline()} aria-label="Close outline">✕</button>
     </div>
   
     <div class="headings">

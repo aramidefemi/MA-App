@@ -5,38 +5,98 @@
   import { listener, listenerCtx } from '@milkdown/plugin-listener'
   import FormatBubbleToolbar from './FormatBubbleToolbar.svelte'
   import { createFormatBubblePlugin } from '../editor/formatBubble.js'
+  import { createImageDisplayPlugin, createImageDropPlugin } from '../editor/imageDrop.js'
+  import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
+  import { document } from '../modules/document'
+  import { session } from '../modules/session'
 
   /**
-   * @type {{ initialContent: string, onContentChange: (md: string) => void }}
+   * @type {{
+   *   onContentChange?: (md: string) => void
+   *   onAiClick?: (text: string) => void
+   * }}
    */
-  let { initialContent = '', onContentChange } = $props()
+  let props = $props()
 
   let containerEl = $state()
   /** @type {import('@milkdown/core').Editor | undefined} */
   let editor
 
+  function applyScrollTop() {
+    if (containerEl && session.scrollTop > 0) {
+      containerEl.scrollTop = session.scrollTop
+    }
+  }
+
+  function handleScroll() {
+    if (containerEl) session.setScrollTop(containerEl.scrollTop)
+  }
+
   onMount(() => {
     const root = containerEl
     let disposed = false
+    root?.addEventListener('scroll', handleScroll, { passive: true })
 
     ;(async () => {
       const instance = await Editor.make()
         .config((ctx) => {
           ctx.set(rootCtx, root)
-          ctx.set(defaultValueCtx, initialContent)
+          ctx.set(defaultValueCtx, document.content)
 
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-            onContentChange?.(markdown)
+            document.setContent(markdown)
+            props.onContentChange?.(markdown)
           })
         })
         .use(commonmark)
         .use(listener)
         .use(
-          createFormatBubblePlugin((target, props) => {
-            const instance = mount(FormatBubbleToolbar, { target, props })
-            return () => unmount(instance)
+          createFormatBubblePlugin((target, bubbleProps) => {
+            aiLog('Editor: mounting FormatBubbleToolbar', {
+              hasOnAiClick: !!props.onAiClick,
+              onAiClickType: typeof props.onAiClick,
+              filePath: document.filePath,
+            })
+            const instance = mount(FormatBubbleToolbar, {
+              target,
+              props: {
+                getSelectionText: bubbleProps.getSelectionText,
+                actions: bubbleProps.actions,
+                registerRefresh: bubbleProps.registerRefresh,
+                onAiClick: (text) => {
+                  aiLog('Editor.onAiClick invoked', {
+                    text: text.slice(0, 80),
+                    length: text.length,
+                    hasParentCallback: !!props.onAiClick,
+                    parentType: typeof props.onAiClick,
+                  })
+                  if (!props.onAiClick) {
+                    aiWarn('Editor.onAiClick ABORT — parent callback missing')
+                    return
+                  }
+                  try {
+                    props.onAiClick(text)
+                    aiLog('Editor.onAiClick parent callback returned OK')
+                  } catch (err) {
+                    aiWarn('Editor.onAiClick parent callback THREW', {
+                      message: err?.message,
+                      stack: err?.stack,
+                    })
+                  }
+                },
+              },
+            })
+            return () => {
+              aiLog('Editor: unmounting FormatBubbleToolbar')
+              unmount(instance)
+            }
           })
         )
+        .use(createImageDisplayPlugin(() => document.filePath))
+        .use(createImageDropPlugin({
+          getDocumentPath: () => document.filePath,
+          onSaveRequired: () => document.saveAs(),
+        }))
         .create()
 
       if (disposed) {
@@ -44,10 +104,12 @@
         return
       }
       editor = instance
+      applyScrollTop()
     })()
 
     return () => {
       disposed = true
+      root?.removeEventListener('scroll', handleScroll)
       editor?.destroy()
       editor = undefined
     }

@@ -9,6 +9,7 @@ import {
   offset,
   shift,
 } from '@floating-ui/dom'
+import { aiLog } from '../debug/aiFlowLog.js'
 import {
   blockquoteSchema,
   bulletListSchema,
@@ -90,23 +91,77 @@ function createActions(ctx) {
   }
 }
 
-/** @param {import('@milkdown/prose/view').EditorView} view */
-function shouldShowBubble(view, bubbleEl) {
+/** @param {import('@milkdown/prose/view').EditorView} view @param {HTMLElement} bubbleEl @param {string} cachedText */
+function shouldShowBubble(view, bubbleEl, cachedText) {
+  const focusInBubble = bubbleEl.contains(document.activeElement)
+
   const { selection, doc } = view.state
-  if (selection.empty || !view.editable) return false
-  if (!(selection instanceof TextSelection)) return false
+  if (selection.empty || !view.editable) {
+    if (focusInBubble && cachedText.trim()) {
+      aiLog('shouldShowBubble: true — toolbar focus, cached selection', {
+        cached: cachedText.slice(0, 80),
+        length: cachedText.length,
+      })
+      return true
+    }
+    aiLog('shouldShowBubble: false — empty selection or not editable', {
+      empty: selection.empty,
+      editable: view.editable,
+    })
+    return false
+  }
+  if (!(selection instanceof TextSelection)) {
+    aiLog('shouldShowBubble: false — not TextSelection')
+    return false
+  }
 
   const text = doc.textBetween(selection.from, selection.to, ' ')
-  if (!text.trim().length) return false
+  if (!text.trim().length) {
+    aiLog('shouldShowBubble: false — selection text empty')
+    return false
+  }
 
   const domSel = window.getSelection()
   const anchorInEditor =
     domSel?.anchorNode != null && view.dom.contains(domSel.anchorNode)
-  const focusInBubble = bubbleEl.contains(document.activeElement)
 
-  if (!view.hasFocus() && !anchorInEditor && !focusInBubble) return false
+  if (!view.hasFocus() && !anchorInEditor && !focusInBubble) {
+    aiLog('shouldShowBubble: false — no editor/bubble focus', {
+      hasFocus: view.hasFocus(),
+      anchorInEditor,
+      focusInBubble,
+      activeElement: document.activeElement?.className,
+    })
+    return false
+  }
+
+  aiLog('shouldShowBubble: true', { text: text.slice(0, 80), length: text.length })
 
   return true
+}
+
+/**
+ * Anchor rect for the bubble — uses live DOM selection when it matches the editor
+ * so coords stay viewport-correct inside a scrolling editor root.
+ * @param {import('@milkdown/prose/view').EditorView} view
+ * @param {number} from
+ * @param {number} to
+ */
+function getSelectionAnchorRect(view, from, to) {
+  const sel = window.getSelection()
+  if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+    const range = sel.getRangeAt(0)
+    if (view.dom.contains(range.commonAncestorContainer)) {
+      const rect = range.getBoundingClientRect()
+      if (rect.width > 0 || rect.height > 0) return rect
+    }
+  }
+  return posToDOMRect(view, from, to)
+}
+
+/** Scroll container for the editor (used by floating-ui autoUpdate). */
+function getEditorScrollRoot(view) {
+  return view.dom.closest('.editor-root') ?? view.dom.parentElement ?? view.dom
 }
 
 /**
@@ -136,11 +191,44 @@ export function createFormatBubblePlugin(mountToolbar) {
       bulletList: false,
       orderedList: false,
     }
+    let selectionText = ''
+    /** Text cached while bubble is visible — survives selection collapse on toolbar click */
+    let bubbleSelectionText = ''
+    /** Doc positions for the last non-empty selection — used when toolbar keeps focus */
+    let bubbleFrom = 0
+    let bubbleTo = 0
     const actions = createActions(ctx)
-    let refreshActive = () => {}
+    /** @param {string} [textOverride] */
+    let refreshActive = (_textOverride) => {}
+
+    const readSelectionText = () => {
+      const view = editorView
+      if (view) {
+        const { from, to, doc, selection } = view.state
+        if (!selection.empty) {
+          const live = doc.textBetween(from, to, ' ').trim()
+          if (live) {
+            aiLog('readSelectionText: live selection', { live: live.slice(0, 80), length: live.length })
+            return live
+          }
+        }
+      }
+      const cached = bubbleSelectionText || selectionText
+      aiLog('readSelectionText: cached fallback', {
+        cached: cached.slice(0, 80),
+        length: cached.length,
+        bubbleSelectionTextLen: bubbleSelectionText.length,
+        selectionTextLen: selectionText.length,
+      })
+      return cached
+    }
 
     const hideBubble = () => {
       if (content.dataset.show === 'false') return
+      aiLog('hideBubble', {
+        activeElement: document.activeElement?.className,
+        bubbleSelectionTextLen: bubbleSelectionText.length,
+      })
       content.dataset.show = 'false'
       cleanupAutoUpdate?.()
       cleanupAutoUpdate = null
@@ -148,18 +236,38 @@ export function createFormatBubblePlugin(mountToolbar) {
 
     /** @param {import('@milkdown/prose/view').EditorView} view */
     const syncBubble = (view) => {
-      if (!shouldShowBubble(view, content)) {
+      if (!shouldShowBubble(view, content, bubbleSelectionText)) {
         hideBubble()
         return
       }
 
+      const { from, to, doc, selection } = view.state
       active = getActiveState(ctx)
-      refreshActive()
-
-      const { from, to } = view.state.selection
+      const liveText = selection.empty
+        ? ''
+        : doc.textBetween(from, to, ' ').trim()
+      if (liveText) {
+        selectionText = liveText
+        bubbleSelectionText = liveText
+        bubbleFrom = from
+        bubbleTo = to
+      }
+      const anchorFrom = selection.empty ? bubbleFrom : from
+      const anchorTo = selection.empty ? bubbleTo : to
+      const textForToolbar = liveText || bubbleSelectionText || selectionText
+      aiLog('syncBubble: selection synced', {
+        text: textForToolbar.slice(0, 80),
+        length: textForToolbar.length,
+        liveText: liveText.slice(0, 80),
+        cached: bubbleSelectionText.slice(0, 80),
+        from: anchorFrom,
+        to: anchorTo,
+        selectionEmpty: selection.empty,
+      })
+      refreshActive(textForToolbar)
       const virtualEl = {
-        getBoundingClientRect: () => posToDOMRect(view, from, to),
-        contextElement: view.dom,
+        getBoundingClientRect: () => getSelectionAnchorRect(view, anchorFrom, anchorTo),
+        contextElement: getEditorScrollRoot(view),
       }
 
       content.dataset.show = 'true'
@@ -183,19 +291,33 @@ export function createFormatBubblePlugin(mountToolbar) {
       cleanupAutoUpdate = autoUpdate(virtualEl, content, updatePosition)
     }
 
-    const scheduleUpdate = () => {
+    const scheduleUpdate = (immediate = false) => {
       if (!editorView) return
       if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = setTimeout(() => syncBubble(editorView), 50)
+      debounceTimer = null
+      const run = () => {
+        if (editorView) syncBubble(editorView)
+      }
+      if (immediate) {
+        // mouseup/keyup fire before ProseMirror applies the new selection
+        requestAnimationFrame(run)
+        return
+      }
+      debounceTimer = setTimeout(run, 50)
     }
 
     const destroyMount = mountToolbar(content, {
-      get active() {
-        return active
-      },
+      getSelectionText: readSelectionText,
       actions,
       registerRefresh: (refresh) => {
-        refreshActive = refresh
+        refreshActive = (textOverride) => {
+          const text = textOverride ?? (bubbleSelectionText || selectionText)
+          refresh(active, text)
+        }
+        aiLog('registerRefresh: toolbar wired', {
+          text: (bubbleSelectionText || selectionText).slice(0, 80),
+          length: (bubbleSelectionText || selectionText).length,
+        })
       },
     })
 
@@ -205,7 +327,7 @@ export function createFormatBubblePlugin(mountToolbar) {
         handleDOMEvents: {
           mouseup: (view) => {
             editorView = view
-            scheduleUpdate()
+            scheduleUpdate(true)
             return false
           },
           keyup: (view) => {
@@ -232,6 +354,7 @@ export function createFormatBubblePlugin(mountToolbar) {
             if (debounceTimer) clearTimeout(debounceTimer)
             hideBubble()
             cleanupAutoUpdate?.()
+            refreshActive = (_textOverride) => {}
             destroyMount()
             content.remove()
             editorView = null

@@ -4,13 +4,14 @@
     formatReadingTime,
   } from '../documentStats.js'
   import { exportDocx, exportPdf, printDocument } from '../export.js'
-
-  let { content = '', fileName = null, onOpenSettings } = $props()
+  import { document } from '../modules/document'
+  import { workspace } from '../modules/workspace'
 
   let exportOpen = $state(false)
 
-  let stats = $derived(getDocumentStats(content))
+  let stats = $derived(getDocumentStats(document.content))
   let readingTime = $derived(formatReadingTime(stats.readingSeconds))
+  let fileName = $derived(document.fileName)
 
   function toggleExport(event) {
     event.stopPropagation()
@@ -23,8 +24,8 @@
 
   async function handleExport(format) {
     closeExport()
-    if (format === 'docx') await exportDocx(content, fileName)
-    else if (format === 'pdf') await exportPdf(content, fileName)
+    if (format === 'docx') await exportDocx(document.content, fileName)
+    else if (format === 'pdf') await exportPdf(document.content, fileName)
   }
 
   function handlePrint() {
@@ -106,7 +107,7 @@
       class="icon-btn"
       title="Settings"
       aria-label="Settings"
-      onclick={() => onOpenSettings?.()}
+      onclick={() => workspace.openSettings()}
     >
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
         <path

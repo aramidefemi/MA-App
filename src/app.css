@@ -185,6 +185,16 @@ html, body {
   margin: 2em 0;
 }
 
+/* images */
+.milkdown img,
+.milkdown .editor-image {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.2em auto;
+  border-radius: var(--radius);
+}
+
 /* placeholder */
 .milkdown .ProseMirror p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);

@@ -1,10 +1,11 @@
 import { defineConfig } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { milkdownRegexpCompat } from './scripts/vite-plugin-milkdown-regexp-compat.mjs'
 
 const host = process.env.TAURI_DEV_HOST
 
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [milkdownRegexpCompat(), svelte()],
   clearScreen: false,
   server: {
     port: 1420,

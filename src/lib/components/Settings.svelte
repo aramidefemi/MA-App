@@ -1,4 +1,6 @@
 <script>
+  import KeySetup from './KeySetup.svelte'
+
   let { onBack } = $props()
 </script>
 
@@ -11,7 +13,7 @@
   </header>
 
   <div class="settings-body">
-    <p class="placeholder">Nothing here yet.</p>
+    <KeySetup />
   </div>
 </div>
 
@@ -61,16 +63,7 @@
 
   .settings-body {
     flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    overflow-y: auto;
     padding: 24px;
-  }
-
-  .placeholder {
-    font-family: var(--font-ui);
-    font-size: 12px;
-    color: var(--text-dim);
-    letter-spacing: 0.02em;
   }
 </style>

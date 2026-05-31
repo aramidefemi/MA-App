@@ -1,8 +1,5 @@
 <script>
   import { onMount } from 'svelte'
-  import { open, save } from '@tauri-apps/plugin-dialog'
-  import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
-  import { homeDir } from '@tauri-apps/api/path'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
   import { exportDocx, exportPdf, printDocument } from './lib/export.js'
@@ -14,11 +11,15 @@
   import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
   import Settings from './lib/components/Settings.svelte'
   import SidebarToggle from './lib/components/SidebarToggle.svelte'
-  import { app } from './lib/app.js'
+  import ResearchPanel from './lib/components/ResearchPanel.svelte'
+  import { research } from './lib/modules/research'
+  import { document } from './lib/modules/document'
+  import { ui } from './lib/modules/ui'
+  import { workspace } from './lib/modules/workspace'
+  import { aiLog } from './lib/debug/aiFlowLog.js'
+  import { initUsageTracking } from './lib/modules/usage'
+  import { session, persistSession } from './lib/modules/session'
   // import { addRecentProject, loadRecentProjects, projectName } from './lib/recentProjects.js'
-
-  const UNTITLED_PATH = 'untitled.md'
-  const isUntitled = (path) => path === UNTITLED_PATH
 
   // ─── State ────────────────────────────────────────────────────
   let filePath     = $state(null)
@@ -32,10 +33,33 @@
   let topbarDismissed = $state(false)
   let topbarHovered   = $state(false)
   let skipTopbarHide  = $state(true)
+  let showResearch    = $state(false)
+  let researchSessionId = $state(0)
   // let recentProjects  = $state([])
   let homePath        = $state('')
 
-  // ─── Derived ──────────────────────────────────────────────────
+  $effect(() => {
+    topbarDismissed = ui.topbarDismissed
+    topbarHovered = ui.topbarHovered
+    skipTopbarHide = ui.skipTopbarHide
+    homePath = ui.homePath
+  })
+
+  $effect(() => {
+    showResearch = research.showResearch
+    researchSessionId = research.sessionId
+  })
+
+  $effect(() => {
+    aiLog('App research state changed', {
+      showResearch,
+      researchSessionId,
+      researchInputLen: research.researchInput.length,
+      researchInputPreview: research.researchInput.slice(0, 80),
+      filePath,
+      showWelcome,
+    })
+  })
   let showWelcome = $derived(!filePath && !folderPath)
   let topbarVisible = $derived(!topbarDismissed || topbarHovered)
   let isDirty  = $derived(content !== savedContent)
@@ -46,10 +70,47 @@
       : null
   )
 
-  // ─── Recent projects (disabled) ─────────────────────────────
   $effect(() => {
-    // loadRecentProjects().then((list) => (recentProjects = list))
-    homeDir().then((dir) => (homePath = dir))
+    filePath = document.filePath
+    content = document.content
+    savedContent = document.savedContent
+    saveStatus = document.saveStatus
+  })
+
+  $effect(() => {
+    folderPath = workspace.folderPath
+    showSidebar = workspace.showSidebar
+    showOutline = workspace.showOutline
+    showSettings = workspace.showSettings
+  })
+
+  $effect(() => {
+    document.filePath
+    workspace.folderPath
+    workspace.showSidebar
+    workspace.showOutline
+    research.showResearch
+    session.scrollTop
+    persistSession()
+  })
+
+  let lastPersistedFilePath = $state(undefined)
+  $effect(() => {
+    const path = document.filePath
+    if (!session.ready) return
+    if (lastPersistedFilePath === undefined) {
+      lastPersistedFilePath = path
+      return
+    }
+    if (path !== lastPersistedFilePath) {
+      lastPersistedFilePath = path
+      session.setScrollTop(0)
+    }
+  })
+
+  onMount(() => {
+    if (getCurrentWindow().label !== 'main') return
+    return initUsageTracking()
   })
 
   onMount(() => {
@@ -67,13 +128,6 @@
     })
   })
 
-  function formatDisplayPath(path) {
-    if (homePath && path.startsWith(homePath)) {
-      return `~${path.slice(homePath.length)}`
-    }
-    return path
-  }
-
   // async function rememberProject(type, path) {
   //   recentProjects = await addRecentProject({
   //     type,
@@ -83,38 +137,26 @@
   // }
 
   async function loadFileAt(path) {
-    const text = await readTextFile(path)
-    filePath = path
-    content = text
-    savedContent = text
-    showSettings = false
+    await document.loadFileAt(path)
+    workspace.closeSettings()
     resetTopbar()
     // await rememberProject('file', path)
   }
 
   async function loadFolderAt(path) {
-    folderPath = path
-    showSidebar = true
+    await workspace.loadFolderAt(path)
     // await rememberProject('folder', path)
   }
 
   // ─── File ops ─────────────────────────────────────────────────
   async function openFile() {
-    const selected = await open({
-      filters: [{
-        name: app.fileDialog.filterName,
-        extensions: app.fileDialog.extensions,
-      }],
-      multiple: false,
-    })
-    if (!selected) return
-    await loadFileAt(selected)
+    await document.openFile()
+    workspace.closeSettings()
+    resetTopbar()
   }
 
   async function openFolder() {
-    const selected = await open({ directory: true, multiple: false })
-    if (!selected) return
-    await loadFolderAt(selected)
+    await workspace.openFolder()
   }
 
   // async function openRecent(project) {
@@ -126,63 +168,31 @@
   // }
 
   async function openFileFromTree(path) {
-    if (isDirty) await saveFile()
-    await loadFileAt(path)
+    await document.openFileFromTree(path)
+    workspace.closeSettings()
+    resetTopbar()
   }
 
   async function saveFile() {
-    if (!filePath || isUntitled(filePath)) {
-      await saveAs()
-      return
-    }
-    if (!isDirty) return
-    saveStatus = 'saving'
-    try {
-      await writeTextFile(filePath, content)
-      savedContent = content
-      saveStatus = 'saved'
-      setTimeout(() => (saveStatus = 'idle'), 1400)
-    } catch (e) {
-      saveStatus = 'error'
-      console.error('Save failed:', e)
-    }
+    await document.saveFile()
   }
 
   async function saveAs() {
-    const selected = await save({
-      filters: [{
-        name: app.fileDialog.filterName,
-        extensions: app.fileDialog.extensions,
-      }],
-    })
-    if (!selected) return
-    saveStatus = 'saving'
-    try {
-      await writeTextFile(selected, content)
-      filePath = selected
-      savedContent = content
-      showSettings = false
-      resetTopbar()
-      saveStatus = 'saved'
-      setTimeout(() => (saveStatus = 'idle'), 1400)
-      // await rememberProject('file', selected)
-    } catch (e) {
-      saveStatus = 'error'
-      console.error('Save as failed:', e)
-    }
+    await document.saveAs()
+    workspace.closeSettings()
+    resetTopbar()
   }
 
   function startWriting() {
-    filePath = UNTITLED_PATH
-    content = ''
-    savedContent = ''
-    showSettings = false
+    document.startWriting()
+    workspace.closeSettings()
     resetTopbar()
   }
 
   function newFile() {
-    if (isDirty && filePath) saveFile()
-    startWriting()
+    document.newFile()
+    workspace.closeSettings()
+    resetTopbar()
   }
 
   async function newWindow() {
@@ -200,12 +210,9 @@
   }
 
   async function closeTab() {
-    if (isDirty) await saveFile()
-    filePath = null
-    content = ''
-    savedContent = ''
-    showOutline = false
-    showSettings = false
+    await document.closeTab()
+    workspace.closeOutline()
+    workspace.closeSettings()
     resetTopbar()
   }
 
@@ -247,44 +254,44 @@
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 'b' && folderPath) {
       e.preventDefault()
-      showSidebar = !showSidebar
+      workspace.toggleSidebar()
     }
     if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
       e.preventDefault()
-      showOutline = !showOutline
+      workspace.toggleOutline()
+    }
+    if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+      e.preventDefault()
+      // ⌘E — explain selected text (Agent 3b wires the actual call)
     }
     if (e.key === 'Escape') {
-      if (showSettings) showSettings = false
-      else if (showOutline) showOutline = false
+      if (showSettings) workspace.closeSettings()
+      else if (showOutline) workspace.closeOutline()
     }
   }
 
   function toggleSidebar() {
-    if (folderPath) showSidebar = !showSidebar
+    workspace.toggleSidebar()
   }
 
   // ─── Topbar distraction-free mode ─────────────────────────────
   function resetTopbar() {
-    topbarDismissed = false
-    topbarHovered = false
-    skipTopbarHide = true
+    ui.resetTopbar()
+  }
+
+  function openResearchWithText(text) {
+    research.openWithText(text)
   }
 
   // ─── Content sync from editor ─────────────────────────────────
-  function handleContentChange(markdown) {
-    content = markdown
-    if (skipTopbarHide) {
-      skipTopbarHide = false
-      return
-    }
-    topbarDismissed = true
+  function handleContentChange(_markdown) {
+    ui.handleTopbarOnEdit()
   }
 </script>
 
 <svelte:window onkeydown={handleKeydown} />
 
 <div class="app">
-
   <!-- ─── Welcome ─────────────────────────────────────── -->
   {#if showWelcome}
     <div class="titlebar-drag" data-tauri-drag-region></div>
@@ -313,11 +320,7 @@
               activeFile={filePath}
               onSelect={openFileFromTree}
             />
-            <DocumentMetaBar
-              {content}
-              {fileName}
-              onOpenSettings={() => (showSettings = true)}
-            />
+            <DocumentMetaBar />
           </aside>
         {/if}
 
@@ -327,8 +330,8 @@
             class:expanded={topbarVisible}
             class:has-sidebar={hasSidebar}
             role="presentation"
-            onmouseenter={() => (topbarHovered = true)}
-            onmouseleave={() => (topbarHovered = false)}
+            onmouseenter={() => (ui.topbarHovered = true)}
+            onmouseleave={() => (ui.topbarHovered = false)}
           >
             <div class="topbar-hover-zone" data-tauri-drag-region></div>
 
@@ -374,7 +377,7 @@
           <button
             class="outline-float"
             class:active={showOutline}
-            onclick={() => showOutline = !showOutline}
+            onclick={() => workspace.toggleOutline()}
             title="Document outline (⌘\)"
             aria-label="Toggle outline"
           >
@@ -389,31 +392,34 @@
             {#if filePath}
               {#key filePath}
                 <Editor
-                  initialContent={content}
                   onContentChange={handleContentChange}
+                  onAiClick={openResearchWithText}
                 />
               {/key}
             {:else}
               <div class="folder-prompt">
                 <p>Select a markdown file from the sidebar</p>
-                <span class="folder-prompt-path">{formatDisplayPath(folderPath)}</span>
+                <span class="folder-prompt-path">{ui.formatDisplayPath(folderPath)}</span>
               </div>
             {/if}
             {#if showSettings}
               <div class="settings-overlay">
-                <Settings onBack={() => (showSettings = false)} />
+                <Settings onBack={() => workspace.closeSettings()} />
               </div>
             {/if}
           </div>
         </div>
+
+        {#if showResearch}
+          {#key researchSessionId}
+            <ResearchPanel />
+          {/key}
+        {/if}
       </div>
 
     <!-- outline panel -->
     {#if showOutline}
-      <OutlinePanel
-        {content}
-        onClose={() => showOutline = false}
-      />
+      <OutlinePanel />
     {/if}
     </div>
   {/if}

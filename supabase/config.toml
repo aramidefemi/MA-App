@@ -1,0 +1,5 @@
+# Ma Editor — https://xmehatovmiaeibkprvfq.supabase.co
+project_id = "xmehatovmiaeibkprvfq"
+
+[functions.ai-proxy]
+verify_jwt = true

@@ -1,21 +1,13 @@
 <script>
-  /**
-   * @type {{
-   *   active: {
-   *     bold: boolean
-   *     italic: boolean
-   *     code: boolean
-   *     link: boolean
-   *     heading: number
-   *     blockquote: boolean
-   *     bulletList: boolean
-   *     orderedList: boolean
-   *   }
-   *   actions: Record<string, (...args: unknown[]) => void>
-   *   registerRefresh?: (refresh: () => void) => void
-   * }}
-   */
-  let { active, actions, registerRefresh } = $props()
+  import { onMount } from 'svelte'
+  import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
+
+  let {
+    getSelectionText,
+    actions,
+    registerRefresh,
+    onAiClick,
+  } = $props()
 
   const PRIMARY_HEADINGS = [1, 2, 3]
   const OVERFLOW_HEADINGS = [4, 5, 6]
@@ -32,15 +24,34 @@
   }
 
   let snapshot = $state(empty)
+  let selectedText = $state('')
   let expanded = $state(false)
 
-  function refresh() {
-    snapshot = { ...active }
-    if (snapshot.heading >= 4) expanded = true
+  /** @param {typeof empty} activeState @param {string} text */
+  function refresh(activeState, text) {
+    snapshot = { ...activeState }
+    const trimmed = text.trim()
+    if (trimmed) selectedText = trimmed
+    aiLog('FormatBubbleToolbar.refresh', {
+      selectedText: selectedText.slice(0, 80),
+      length: selectedText.length,
+      fromArgs: trimmed.slice(0, 80),
+      skippedEmpty: !trimmed && selectedText.length > 0,
+      hasOnAiClick: !!onAiClick,
+    })
+    if (snapshot.heading >= 4 || snapshot.code || snapshot.link) expanded = true
   }
 
-  $effect(() => {
-    registerRefresh?.(refresh)
+  $effect.pre(() => {
+    registerRefresh(refresh)
+  })
+
+  onMount(() => {
+    aiLog('FormatBubbleToolbar.mounted', {
+      hasOnAiClick: !!onAiClick,
+      onAiClickType: typeof onAiClick,
+      hasGetSelectionText: typeof getSelectionText === 'function',
+    })
   })
 
   function handleMouseDown(e) {
@@ -50,11 +61,49 @@
   /** @param {() => void} fn */
   function act(fn) {
     fn()
-    requestAnimationFrame(refresh)
   }
 
   function toggleMore() {
     expanded = !expanded
+  }
+
+  function handleAiMouseDown(e) {
+    aiLog('FormatBubbleToolbar.handleAiMouseDown START', {
+      eventType: e.type,
+      target: e.target?.className,
+      defaultPrevented: e.defaultPrevented,
+    })
+    e.preventDefault()
+    const fromCache = getSelectionText?.()?.trim() ?? ''
+    const text = fromCache || selectedText.trim()
+    aiLog('FormatBubbleToolbar.handleAiMouseDown text resolved', {
+      text: text.slice(0, 80),
+      length: text.length,
+      fromCache: fromCache.slice(0, 80),
+      fromCacheLen: fromCache.length,
+      selectedText: selectedText.slice(0, 80),
+      selectedTextLen: selectedText.length,
+      hasOnAiClick: !!onAiClick,
+      onAiClickType: typeof onAiClick,
+    })
+    if (!onAiClick) {
+      aiWarn('FormatBubbleToolbar.handleAiMouseDown ABORT — onAiClick missing')
+      return
+    }
+    aiLog('FormatBubbleToolbar.handleAiMouseDown calling onAiClick', {
+      text: text.slice(0, 80),
+      length: text.length,
+      emptySelection: !text,
+    })
+    try {
+      onAiClick(text)
+      aiLog('FormatBubbleToolbar.handleAiMouseDown onAiClick returned OK')
+    } catch (err) {
+      aiWarn('FormatBubbleToolbar.handleAiMouseDown onAiClick THREW', {
+        message: err?.message,
+        stack: err?.stack,
+      })
+    }
   }
 </script>
 
@@ -66,6 +115,77 @@
   aria-label="Text formatting"
   onmousedown={handleMouseDown}
 >
+  {#if onAiClick}
+    <button
+      type="button"
+      class="btn icon ai"
+      title="Explain with AI"
+      aria-label="Explain with AI"
+      onmousedown={handleAiMouseDown}
+      onmouseup={() => aiLog('FormatBubbleToolbar.ai button mouseup')}
+      onclick={() => aiLog('FormatBubbleToolbar.ai button click')}
+    >
+      ✦
+    </button>
+    <span class="sep" aria-hidden="true"></span>
+  {/if}
+
+  <div class="group" role="group" aria-label="Inline styles">
+    <button
+      type="button"
+      class="btn icon"
+      class:active={snapshot.bold}
+      title="Bold (⌘B)"
+      aria-label="Bold"
+      aria-pressed={snapshot.bold}
+      onclick={() => act(() => actions.bold())}
+    >
+      <strong>B</strong>
+    </button>
+    <button
+      type="button"
+      class="btn icon"
+      class:active={snapshot.italic}
+      title="Italic (⌘I)"
+      aria-label="Italic"
+      aria-pressed={snapshot.italic}
+      onclick={() => act(() => actions.italic())}
+    >
+      <em>I</em>
+    </button>
+    {#if expanded}
+      <button
+        type="button"
+        class="btn icon"
+        class:active={snapshot.code}
+        title="Inline code"
+        aria-label="Inline code"
+        aria-pressed={snapshot.code}
+        onclick={() => act(() => actions.code())}
+      >
+        <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M4.2 3 2 6l2.2 3M7.8 3 10 6 7.8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <button
+        type="button"
+        class="btn icon"
+        class:active={snapshot.link}
+        title="Link"
+        aria-label="Link"
+        aria-pressed={snapshot.link}
+        onclick={() => act(() => actions.link())}
+      >
+        <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+          <path d="M5.2 6.8a2.2 2.2 0 0 0 3.1 0l1.4-1.4a2.2 2.2 0 0 0-3.1-3.1L6.3 3.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          <path d="M6.8 5.2a2.2 2.2 0 0 0-3.1 0L2.3 6.6a2.2 2.2 0 0 0 3.1 3.1l1.4-1.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+        </svg>
+      </button>
+    {/if}
+  </div>
+
+  <span class="sep" aria-hidden="true"></span>
+
   <div class="group headings" role="group" aria-label="Headings">
     {#each PRIMARY_HEADINGS as level}
       <button
@@ -99,58 +219,6 @@
 
   <span class="sep" aria-hidden="true"></span>
 
-  <div class="group" role="group" aria-label="Inline styles">
-    <button
-      type="button"
-      class="btn icon"
-      class:active={snapshot.bold}
-      title="Bold (⌘B)"
-      aria-label="Bold"
-      aria-pressed={snapshot.bold}
-      onclick={() => act(() => actions.bold())}
-    >
-      <strong>B</strong>
-    </button>
-    <button
-      type="button"
-      class="btn icon"
-      class:active={snapshot.italic}
-      title="Italic (⌘I)"
-      aria-label="Italic"
-      aria-pressed={snapshot.italic}
-      onclick={() => act(() => actions.italic())}
-    >
-      <em>I</em>
-    </button>
-    {#if expanded}
-      <button
-        type="button"
-        class="btn icon"
-        title="Underline (not supported in markdown)"
-        aria-label="Underline"
-        disabled
-      >
-        <span class="underline">U</span>
-      </button>
-    {/if}
-    <button
-      type="button"
-      class="btn icon"
-      class:active={snapshot.link}
-      title="Link"
-      aria-label="Link"
-      aria-pressed={snapshot.link}
-      onclick={() => act(() => actions.link())}
-    >
-      <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M5.2 6.8a2.2 2.2 0 0 0 3.1 0l1.4-1.4a2.2 2.2 0 0 0-3.1-3.1L6.3 3.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-        <path d="M6.8 5.2a2.2 2.2 0 0 0-3.1 0L2.3 6.6a2.2 2.2 0 0 0 3.1 3.1l1.4-1.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-      </svg>
-    </button>
-  </div>
-
-  <span class="sep" aria-hidden="true"></span>
-
   <div class="group" role="group" aria-label="Blocks">
     <button
       type="button"
@@ -165,21 +233,6 @@
         <path d="M3 3h2v5H3V3zm4 0h2v5H7V3z" fill="currentColor"/>
       </svg>
     </button>
-    {#if expanded}
-      <button
-        type="button"
-        class="btn icon"
-        class:active={snapshot.code}
-        title="Inline code"
-        aria-label="Inline code"
-        aria-pressed={snapshot.code}
-        onclick={() => act(() => actions.code())}
-      >
-        <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path d="M4.2 3 2 6l2.2 3M7.8 3 10 6 7.8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
-      </button>
-    {/if}
     <button
       type="button"
       class="btn icon"
@@ -324,6 +377,20 @@
     padding: 0 6px;
   }
 
+  .btn.ai {
+    color: var(--accent);
+    font-size: 20px;
+    font-weight: 800;
+    line-height: 1;
+    min-width: 38px;
+    background: var(--accent-dim);
+  }
+
+  .btn.ai:hover {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent-dim) 70%, var(--accent) 30%);
+  }
+
   .btn strong,
   .btn em {
     font-size: var(--bubble-icon-fs);
@@ -334,11 +401,6 @@
   .btn em {
     font-style: italic;
     font-weight: 500;
-  }
-
-  .underline {
-    text-decoration: underline;
-    font-size: var(--bubble-icon-fs);
   }
 
   .glyph {
