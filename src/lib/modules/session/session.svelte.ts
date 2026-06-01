@@ -15,6 +15,7 @@ import {
 
 let scrollTop = $state(0)
 let typewriterScroll = $state(true)
+let focusMode = $state(false)
 let ready = $state(false)
 let restoring = false
 let persistEnabled = false
@@ -24,6 +25,7 @@ export function snapshot(): SessionState {
     filePath: document.filePath,
     scrollTop,
     typewriterScroll,
+    focusMode,
     showSidebar: workspace.showSidebar,
     showOutline: workspace.showOutline,
     showResearch: research.showResearch,
@@ -64,6 +66,7 @@ async function resolveForRestore(raw: SessionState): Promise<SessionState> {
     showOutline: raw.showOutline,
     showResearch: raw.showResearch,
     typewriterScroll: raw.typewriterScroll,
+    focusMode: raw.focusMode,
   }
 
   if (raw.folderPath && (await pathExists(raw.folderPath))) {
@@ -94,6 +97,7 @@ async function applySession(state: SessionState): Promise<void> {
   research.restorePanel(state.showResearch)
   scrollTop = state.scrollTop
   typewriterScroll = state.typewriterScroll
+  focusMode = state.focusMode
 }
 
 export async function initSession(shouldPersist: boolean): Promise<void> {
@@ -122,6 +126,14 @@ function toggleTypewriterScroll() {
   typewriterScroll = !typewriterScroll
 }
 
+function setFocusMode(value: boolean) {
+  focusMode = value
+}
+
+function toggleFocusMode() {
+  focusMode = !focusMode
+}
+
 export function persistSession(): void {
   if (!ready || restoring || !persistEnabled) return
   void writeSession(snapshot())
@@ -130,9 +142,12 @@ export function persistSession(): void {
 export const session = {
   get scrollTop() { return scrollTop },
   get typewriterScroll() { return typewriterScroll },
+  get focusMode() { return focusMode },
   get ready() { return ready },
   setScrollTop,
   setTypewriterScroll,
   toggleTypewriterScroll,
+  setFocusMode,
+  toggleFocusMode,
   initSession,
 }

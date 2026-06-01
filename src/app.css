@@ -1,3 +1,5 @@
+@import '@milkdown/kit/prose/gapcursor/style/gapcursor.css';
+
 /* ─── Reset ─────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -83,7 +85,37 @@ html, body {
   pointer-events: auto;
 }
 
+/* ─── Slash command menu ────────────────────────────────────── */
+.slash-menu-root {
+  position: fixed;
+  z-index: 1001;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.12s ease, visibility 0.12s ease;
+}
+
+.slash-menu-root[data-show='true'] {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
 /* ─── Milkdown / ProseMirror ────────────────────────────────── */
+/* Drop target line (plugin-cursor / prosemirror-drop-indicator) */
+.milkdown-drop-indicator.calm-drop-indicator {
+  background-color: var(--accent);
+  opacity: 0.5;
+  border-radius: 1px;
+  z-index: 50;
+}
+
+/* Gap cursor — between blocks / below images */
+.milkdown .ProseMirror-gapcursor:after {
+  border-top-color: var(--accent);
+  opacity: 0.65;
+}
+
 .milkdown,
 .milkdown * {
   user-select: text;
@@ -155,8 +187,28 @@ html, body {
 /* inline */
 .milkdown strong { color: var(--text-heading); font-weight: 700; }
 .milkdown em     { color: var(--text-muted); font-style: italic; }
-.milkdown a      { color: var(--accent); text-decoration: none; border-bottom: 1px solid rgba(74,222,128,0.3); }
-.milkdown a:hover { border-color: var(--accent); }
+.milkdown a:not(.wikilink) {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(74,222,128,0.3);
+}
+.milkdown a:not(.wikilink):hover { border-color: var(--accent); }
+
+.milkdown a.wikilink {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dashed rgba(74, 222, 128, 0.45);
+  cursor: pointer;
+}
+.milkdown a.wikilink:hover {
+  border-bottom-style: solid;
+  background: var(--accent-dim);
+}
+
+.milkdown .focus-dimmed {
+  opacity: 0.38;
+  transition: opacity 0.15s ease;
+}
 
 /* code */
 .milkdown code {
@@ -209,6 +261,13 @@ html, body {
   border: none;
   border-top: 1px solid var(--border);
   margin: 2em 0;
+}
+
+/* upload placeholder */
+.milkdown .calm-upload-widget {
+  color: var(--text-dim);
+  font-size: 0.9em;
+  font-style: italic;
 }
 
 /* images */

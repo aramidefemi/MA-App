@@ -9,6 +9,11 @@
     session.setTypewriterScroll(e.currentTarget.checked)
     persistSession()
   }
+
+  function onFocusModeChange(e) {
+    session.setFocusMode(e.currentTarget.checked)
+    persistSession()
+  }
 </script>
 
 <div class="backdrop" onclick={() => onClose?.()} role="presentation"></div>
@@ -43,6 +48,19 @@
           />
         </label>
         <p class="shortcut-hint"><kbd>⌘⇧T</kbd> toggle typewriter scrolling</p>
+
+        <label class="toggle-row">
+          <span class="option-label">
+            Focus mode
+            <span class="option-hint">Dim blocks away from the cursor</span>
+          </span>
+          <input
+            type="checkbox"
+            checked={session.focusMode}
+            onchange={onFocusModeChange}
+          />
+        </label>
+        <p class="shortcut-hint"><kbd>⌘⇧F</kbd> toggle focus mode</p>
 
         <div class="option-block">
           <span class="option-label">Font</span>

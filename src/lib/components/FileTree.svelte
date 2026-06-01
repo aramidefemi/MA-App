@@ -1,5 +1,6 @@
 <script>
   import { readDir } from '@tauri-apps/plugin-fs'
+  import { displayFileName } from '../fileDisplay.js'
   import { isWriterSourceFile } from '../workspaceFileTypes.js'
 
   let { rootPath = '', activeFile = '', onSelect } = $props()
@@ -129,7 +130,7 @@
         <span class="arrow" aria-hidden="true">{expanded.has(entry.path) ? '▼' : '▶'}</span>
         <span class="name">{entry.name}/</span>
       {:else}
-        <span class="name">{entry.name}</span>
+        <span class="name">{displayFileName(entry.name)}</span>
       {/if}
     </button>
   {/each}

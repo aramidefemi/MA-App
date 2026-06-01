@@ -1,5 +1,6 @@
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
+import { displayFileName } from './fileDisplay.js'
 
 const PRINT_STYLES = `
   body {
@@ -46,8 +47,7 @@ const PRINT_STYLES = `
 `
 
 function exportBaseName(fileName) {
-  if (!fileName) return 'document'
-  return fileName.replace(/\.[^.]+$/, '')
+  return displayFileName(fileName) || 'document'
 }
 
 function stripInline(text) {

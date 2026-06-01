@@ -1,14 +1,7 @@
-import { commandsCtx, editorViewCtx } from '@milkdown/core'
-import { insertImageCommand, imageSchema } from '@milkdown/kit/preset/commonmark'
+import { imageSchema } from '@milkdown/kit/preset/commonmark'
 import { Plugin } from '@milkdown/prose/state'
-import { TextSelection } from '@milkdown/prose/state'
 import { $prose } from '@milkdown/utils'
-import {
-  canAttachImages,
-  isImageFile,
-  resolveImageDisplaySrc,
-  saveDroppedImage,
-} from '../imageAssets.js'
+import { resolveImageDisplaySrc } from '../imageAssets.js'
 
 /**
  * Resolve local image paths for in-editor preview while keeping relative paths in markdown.
@@ -49,59 +42,3 @@ export function createImageDisplayPlugin(getDocumentPath) {
   })
 }
 
-/**
- * @param {{
- *   getDocumentPath: () => string | null | undefined
- *   onSaveRequired?: () => void | Promise<void>
- * }} options
- */
-export function createImageDropPlugin({ getDocumentPath, onSaveRequired }) {
-  return $prose((ctx) => {
-    const insertAt = (view, pos) => {
-      if (pos == null) return
-      view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, pos)))
-    }
-
-    const insertImage = async (view, file, pos) => {
-      const documentPath = getDocumentPath()
-      if (!canAttachImages(documentPath)) {
-        await onSaveRequired?.()
-        return
-      }
-
-      const { markdownPath, alt } = await saveDroppedImage(file, documentPath)
-      insertAt(view, pos)
-      ctx.get(commandsCtx).call(insertImageCommand.key, { src: markdownPath, alt })
-      view.focus()
-    }
-
-    return new Plugin({
-      props: {
-        handleDOMEvents: {
-          dragover: (_view, event) => {
-            if ([...event.dataTransfer?.types ?? []].includes('Files')) {
-              event.preventDefault()
-              if (event.dataTransfer) event.dataTransfer.dropEffect = 'copy'
-            }
-            return false
-          },
-          drop: (view, event) => {
-            const files = [...event.dataTransfer?.files ?? []].filter(isImageFile)
-            if (!files.length) return false
-
-            event.preventDefault()
-            const pos = view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos
-
-            ;(async () => {
-              for (const file of files) {
-                await insertImage(view, file, pos)
-              }
-            })().catch(console.error)
-
-            return true
-          },
-        },
-      },
-    })
-  })
-}

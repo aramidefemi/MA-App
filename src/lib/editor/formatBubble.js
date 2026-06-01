@@ -1,30 +1,7 @@
 import { commandsCtx, editorViewCtx } from '@milkdown/core'
 import { posToDOMRect } from '@milkdown/prose'
-import { Plugin, PluginKey, TextSelection } from '@milkdown/prose/state'
-import { $prose } from '@milkdown/utils'
-import {
-  autoUpdate,
-  computePosition,
-  flip,
-  offset,
-  shift,
-} from '@floating-ui/dom'
-import { aiLog } from '../debug/aiFlowLog.js'
-import { createEditorCommands, setEditorCommands } from './editorCommands.js'
-import { pushFormatState, setFormatActions } from './formatEditorApi.js'
-
-/** @typedef {{
- *   bold: boolean,
- *   italic: boolean,
- *   code: boolean,
- *   link: boolean,
- *   heading: number,
- *   blockquote: boolean,
- *   bulletList: boolean,
- *   orderedList: boolean,
- * }} FormatActiveState */
-
-/** @typedef {ReturnType<typeof createActions>} FormatActions */
+import { TextSelection } from '@milkdown/prose/state'
+import { tooltipFactory, TooltipProvider } from '@milkdown/plugin-tooltip'
 import {
   blockquoteSchema,
   bulletListSchema,
@@ -44,8 +21,25 @@ import {
   wrapInHeadingCommand,
   wrapInOrderedListCommand,
 } from '@milkdown/kit/preset/commonmark'
+import { aiLog } from '../debug/aiFlowLog.js'
+import { createEditorCommands, setEditorCommands } from './editorCommands.js'
+import { pushFormatState, setFormatActions } from './formatEditorApi.js'
 
-const BUBBLE_KEY = new PluginKey('FORMAT_BUBBLE')
+/** @typedef {{
+ *   bold: boolean,
+ *   italic: boolean,
+ *   code: boolean,
+ *   link: boolean,
+ *   heading: number,
+ *   blockquote: boolean,
+ *   bulletList: boolean,
+ *   orderedList: boolean,
+ * }} FormatActiveState */
+
+/** @typedef {ReturnType<typeof createActions>} FormatActions */
+
+export const formatBubbleTooltip = tooltipFactory('FORMAT_BUBBLE')
+const [formatBubbleTooltipSpec] = formatBubbleTooltip
 
 /** @param {import('@milkdown/ctx').Ctx} ctx */
 function getActiveState(ctx) {
@@ -106,49 +100,7 @@ function createActions(ctx) {
   }
 }
 
-/** @param {import('@milkdown/prose/view').EditorView} view @param {HTMLElement} bubbleEl @param {string} cachedText */
-function shouldShowBubble(view, bubbleEl, cachedText) {
-  const focusInBubble = bubbleEl.contains(document.activeElement)
-
-  const { selection, doc } = view.state
-  if (selection.empty || !view.editable) {
-    if (focusInBubble && cachedText.trim()) {
-      aiLog('shouldShowBubble: true — toolbar focus, cached selection', {
-        cached: cachedText.slice(0, 80),
-        length: cachedText.length,
-      })
-      return true
-    }
-    aiLog('shouldShowBubble: false — empty selection or not editable', {
-      empty: selection.empty,
-      editable: view.editable,
-    })
-    return false
-  }
-  if (!(selection instanceof TextSelection)) {
-    aiLog('shouldShowBubble: false — not TextSelection')
-    return false
-  }
-
-  const text = doc.textBetween(selection.from, selection.to, ' ')
-  if (!text.trim().length) {
-    aiLog('shouldShowBubble: false — selection text empty')
-    return false
-  }
-
-  // ProseMirror selection is authoritative; DOM focus/anchor checks are flaky
-  // right after mouseup (before focus or getSelection() settle).
-  aiLog('shouldShowBubble: true', { text: text.slice(0, 80), length: text.length })
-  return true
-}
-
-/**
- * Anchor rect for the bubble — uses live DOM selection when it matches the editor
- * so coords stay viewport-correct inside a scrolling editor root.
- * @param {import('@milkdown/prose/view').EditorView} view
- * @param {number} from
- * @param {number} to
- */
+/** @param {import('@milkdown/prose/view').EditorView} view @param {number} from @param {number} to */
 function getSelectionAnchorRect(view, from, to) {
   const sel = window.getSelection()
   if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
@@ -161,226 +113,231 @@ function getSelectionAnchorRect(view, from, to) {
   return posToDOMRect(view, from, to)
 }
 
-/** Scroll container for the editor (used by floating-ui autoUpdate). */
+/** @param {import('@milkdown/prose/view').EditorView} view */
 function getEditorScrollRoot(view) {
   return view.dom.closest('.editor-root') ?? view.dom.parentElement ?? view.dom
 }
 
 /**
- * Custom ProseMirror bubble plugin — avoids Milkdown tooltipFactory ctx timing.
+ * @param {import('@milkdown/prose/view').EditorView} view
+ * @param {HTMLElement} bubbleEl
+ * @param {string} cachedText
+ */
+function shouldShowFormatBubble(view, bubbleEl, cachedText) {
+  const focusInBubble = bubbleEl.contains(document.activeElement)
+  const { selection, doc } = view.state
+
+  if (selection.empty || !view.editable) {
+    return focusInBubble && cachedText.trim().length > 0
+  }
+  if (!(selection instanceof TextSelection)) return false
+
+  return doc.textBetween(selection.from, selection.to, ' ').trim().length > 0
+}
+
+class FormatBubbleView {
+  /** @type {import('@milkdown/prose/view').EditorView} */
+  #view
+  /** @type {HTMLElement} */
+  #content
+  /** @type {TooltipProvider} */
+  #provider
+  /** @type {FormatActions} */
+  #actions
+  /** @type {ReturnType<typeof createEditorCommands>} */
+  #editorCommands
+
+  /** @type {FormatActiveState} */
+  #active = {
+    bold: false,
+    italic: false,
+    code: false,
+    link: false,
+    heading: 0,
+    blockquote: false,
+    bulletList: false,
+    orderedList: false,
+  }
+
+  #selectionText = ''
+  #bubbleSelectionText = ''
+  #bubbleFrom = 0
+  #bubbleTo = 0
+  /** @param {string} [textOverride] */
+  #refreshToolbar = (_textOverride) => {}
+  /** @type {(() => void) | null} */
+  #destroyMount = null
+
+  /**
+   * @param {import('@milkdown/ctx').Ctx} ctx
+   * @param {import('@milkdown/prose/view').EditorView} view
+   * @param {(target: HTMLElement, props: object) => () => void} mountToolbar
+   */
+  constructor(ctx, view, mountToolbar) {
+    this.#view = view
+    this.#actions = createActions(ctx)
+    this.#editorCommands = createEditorCommands(ctx)
+    setFormatActions(this.#actions)
+    setEditorCommands(this.#editorCommands)
+
+    this.#content = document.createElement('div')
+    this.#content.className = 'format-bubble-root'
+
+    this.#provider = new TooltipProvider({
+      content: this.#content,
+      debounce: 50,
+      offset: 10,
+      shift: { padding: 8 },
+      root: document.body,
+      shouldShow: (editorView) =>
+        shouldShowFormatBubble(editorView, this.#content, this.#bubbleSelectionText),
+      floatingUIOptions: { placement: 'top' },
+    })
+
+    this.#provider.onShow = () => this.#onProviderShow()
+    this.#provider.onHide = () => {
+      aiLog('formatBubble: hidden')
+    }
+
+    this.#destroyMount = mountToolbar(this.#content, {
+      getSelectionText: () => this.#readSelectionText(),
+      actions: this.#actions,
+      registerRefresh: (refresh) => {
+        this.#refreshToolbar = (textOverride) => {
+          const text = textOverride ?? (this.#bubbleSelectionText || this.#selectionText)
+          refresh(this.#active, text)
+        }
+      },
+    })
+
+    this.#provider.update(view)
+    this.#emitFormatState(ctx)
+  }
+
+  /** @param {import('@milkdown/ctx').Ctx} ctx */
+  #emitFormatState(ctx) {
+    this.#active = getActiveState(ctx)
+    pushFormatState(this.#active)
+  }
+
+  #readSelectionText() {
+    const { state } = this.#view
+    const { from, to, doc, selection } = state
+    if (!selection.empty) {
+      const live = doc.textBetween(from, to, ' ').trim()
+      if (live) return live
+    }
+    return this.#bubbleSelectionText || this.#selectionText
+  }
+
+  #cacheSelection() {
+    const { from, to, doc, selection } = this.#view.state
+    if (selection.empty) return
+
+    const liveText = doc.textBetween(from, to, ' ').trim()
+    if (!liveText) return
+
+    this.#selectionText = liveText
+    this.#bubbleSelectionText = liveText
+    this.#bubbleFrom = from
+    this.#bubbleTo = to
+  }
+
+  #syncToolbarText() {
+    const { selection } = this.#view.state
+    const text =
+      selection.empty
+        ? this.#bubbleSelectionText || this.#selectionText
+        : this.#view.state.doc
+            .textBetween(selection.from, selection.to, ' ')
+            .trim() ||
+          this.#bubbleSelectionText ||
+          this.#selectionText
+    this.#refreshToolbar(text)
+  }
+
+  #onProviderShow() {
+    this.#syncToolbarText()
+    const { selection } = this.#view.state
+    if (!selection.empty || this.#bubbleFrom >= this.#bubbleTo) return
+
+    const virtualEl = {
+      getBoundingClientRect: () =>
+        getSelectionAnchorRect(this.#view, this.#bubbleFrom, this.#bubbleTo),
+      contextElement: getEditorScrollRoot(this.#view),
+    }
+    this.#provider.show(virtualEl, this.#view)
+  }
+
+  /**
+   * @param {import('@milkdown/prose/view').EditorView} view
+   * @param {import('@milkdown/ctx').Ctx} ctx
+   */
+  update(view, ctx) {
+    this.#view = view
+    this.#cacheSelection()
+    this.#emitFormatState(ctx)
+    this.#provider.update(view)
+    if (this.#content.dataset.show === 'true') this.#syncToolbarText()
+  }
+
+  /** @param {import('@milkdown/prose/view').EditorView} view */
+  onMouseUp(view) {
+    this.#view = view
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        this.#cacheSelection()
+        this.#provider.update(view)
+      })
+    })
+  }
+
+  /** @param {import('@milkdown/prose/view').EditorView} view */
+  onKeyUp(view) {
+    this.#view = view
+    this.#provider.update(view)
+  }
+
+  destroy() {
+    this.#provider.destroy()
+    this.#destroyMount?.()
+    this.#content.remove()
+    this.#refreshToolbar = (_textOverride) => {}
+    setFormatActions(null)
+    setEditorCommands(null)
+  }
+}
+
+/**
+ * Wire @milkdown/plugin-tooltip with FormatBubbleToolbar (Svelte).
  * @param {(target: HTMLElement, props: object) => () => void} mountToolbar
  */
-export function createFormatBubblePlugin(mountToolbar) {
-  return $prose((ctx) => {
-    /** @type {import('@milkdown/prose/view').EditorView | null} */
-    let editorView = null
-    /** @type {ReturnType<typeof setTimeout> | null} */
-    let debounceTimer = null
-    /** @type {(() => void) | null} */
-    let cleanupAutoUpdate = null
+export function configureFormatBubble(ctx, mountToolbar) {
+  /** @type {FormatBubbleView | undefined} */
+  let bubbleView
 
-    const content = document.createElement('div')
-    content.className = 'format-bubble-root'
-    content.dataset.show = 'false'
-
-    let active = {
-      bold: false,
-      italic: false,
-      code: false,
-      link: false,
-      heading: 0,
-      blockquote: false,
-      bulletList: false,
-      orderedList: false,
-    }
-    let selectionText = ''
-    /** Text cached while bubble is visible — survives selection collapse on toolbar click */
-    let bubbleSelectionText = ''
-    /** Doc positions for the last non-empty selection — used when toolbar keeps focus */
-    let bubbleFrom = 0
-    let bubbleTo = 0
-    const actions = createActions(ctx)
-    const editorCommands = createEditorCommands(ctx)
-    setFormatActions(actions)
-    setEditorCommands(editorCommands)
-    /** @param {string} [textOverride] */
-    let refreshActive = (_textOverride) => {}
-
-    const emitFormatState = () => {
-      if (!editorView) return
-      active = getActiveState(ctx)
-      pushFormatState(active)
-    }
-
-    const readSelectionText = () => {
-      const view = editorView
-      if (view) {
-        const { from, to, doc, selection } = view.state
-        if (!selection.empty) {
-          const live = doc.textBetween(from, to, ' ').trim()
-          if (live) {
-            aiLog('readSelectionText: live selection', { live: live.slice(0, 80), length: live.length })
-            return live
-          }
-        }
-      }
-      const cached = bubbleSelectionText || selectionText
-      aiLog('readSelectionText: cached fallback', {
-        cached: cached.slice(0, 80),
-        length: cached.length,
-        bubbleSelectionTextLen: bubbleSelectionText.length,
-        selectionTextLen: selectionText.length,
-      })
-      return cached
-    }
-
-    const hideBubble = () => {
-      if (content.dataset.show === 'false') return
-      aiLog('hideBubble', {
-        activeElement: document.activeElement?.className,
-        bubbleSelectionTextLen: bubbleSelectionText.length,
-      })
-      content.dataset.show = 'false'
-      cleanupAutoUpdate?.()
-      cleanupAutoUpdate = null
-    }
-
-    /** @param {import('@milkdown/prose/view').EditorView} view */
-    const syncBubble = (view) => {
-      if (!shouldShowBubble(view, content, bubbleSelectionText)) {
-        hideBubble()
-        return
-      }
-
-      const { from, to, doc, selection } = view.state
-      active = getActiveState(ctx)
-      pushFormatState(active)
-      const liveText = selection.empty
-        ? ''
-        : doc.textBetween(from, to, ' ').trim()
-      if (liveText) {
-        selectionText = liveText
-        bubbleSelectionText = liveText
-        bubbleFrom = from
-        bubbleTo = to
-      }
-      const anchorFrom = selection.empty ? bubbleFrom : from
-      const anchorTo = selection.empty ? bubbleTo : to
-      const textForToolbar = liveText || bubbleSelectionText || selectionText
-      aiLog('syncBubble: selection synced', {
-        text: textForToolbar.slice(0, 80),
-        length: textForToolbar.length,
-        liveText: liveText.slice(0, 80),
-        cached: bubbleSelectionText.slice(0, 80),
-        from: anchorFrom,
-        to: anchorTo,
-        selectionEmpty: selection.empty,
-      })
-      refreshActive(textForToolbar)
-      const virtualEl = {
-        getBoundingClientRect: () => getSelectionAnchorRect(view, anchorFrom, anchorTo),
-        contextElement: getEditorScrollRoot(view),
-      }
-
-      content.dataset.show = 'true'
-
-      const updatePosition = () => {
-        computePosition(virtualEl, content, {
-          placement: 'top',
-          middleware: [flip(), offset(10), shift({ padding: 8 })],
-        })
-          .then(({ x, y }) => {
-            Object.assign(content.style, {
-              left: `${x}px`,
-              top: `${y}px`,
-            })
-          })
-          .catch(console.error)
-      }
-
-      updatePosition()
-      cleanupAutoUpdate?.()
-      cleanupAutoUpdate = autoUpdate(virtualEl, content, updatePosition)
-    }
-
-    const scheduleUpdate = (immediate = false) => {
-      if (!editorView) return
-      if (debounceTimer) clearTimeout(debounceTimer)
-      debounceTimer = null
-      const run = () => {
-        if (editorView) syncBubble(editorView)
-      }
-      if (immediate) {
-        // mouseup fires before ProseMirror + DOM selection fully settle
-        requestAnimationFrame(() => requestAnimationFrame(run))
-        return
-      }
-      debounceTimer = setTimeout(run, 50)
-    }
-
-    const destroyMount = mountToolbar(content, {
-      getSelectionText: readSelectionText,
-      actions,
-      registerRefresh: (refresh) => {
-        refreshActive = (textOverride) => {
-          const text = textOverride ?? (bubbleSelectionText || selectionText)
-          refresh(active, text)
-        }
-        aiLog('registerRefresh: toolbar wired', {
-          text: (bubbleSelectionText || selectionText).slice(0, 80),
-          length: (bubbleSelectionText || selectionText).length,
-        })
-      },
-    })
-
-    return new Plugin({
-      key: BUBBLE_KEY,
-      props: {
-        handleDOMEvents: {
-          mouseup: (view) => {
-            editorView = view
-            scheduleUpdate(true)
-            return false
-          },
-          keyup: (view) => {
-            editorView = view
-            scheduleUpdate()
-            return false
-          },
+  ctx.set(formatBubbleTooltipSpec.key, {
+    props: {
+      handleDOMEvents: {
+        mouseup: (view) => {
+          bubbleView?.onMouseUp(view)
+          return false
+        },
+        keyup: (view) => {
+          bubbleView?.onKeyUp(view)
+          return false
         },
       },
-      view(view) {
-        editorView = view
-        document.body.appendChild(content)
-        emitFormatState()
-        scheduleUpdate()
-
-        return {
-          update: (nextView, prevState) => {
-            editorView = nextView
-            const { selection } = nextView.state
-            const sameSelection =
-              prevState && prevState.selection.eq(selection)
-            if (!sameSelection) {
-              emitFormatState()
-              scheduleUpdate()
-            } else if (prevState && prevState.doc !== nextView.state.doc) {
-              emitFormatState()
-            }
-          },
-          destroy: () => {
-            if (debounceTimer) clearTimeout(debounceTimer)
-            hideBubble()
-            cleanupAutoUpdate?.()
-            refreshActive = (_textOverride) => {}
-            setFormatActions(null)
-            setEditorCommands(null)
-            destroyMount()
-            content.remove()
-            editorView = null
-          },
-        }
-      },
-    })
+    },
+    view: (view) => {
+      bubbleView = new FormatBubbleView(ctx, view, mountToolbar)
+      return {
+        update: (nextView) => bubbleView?.update(nextView, ctx),
+        destroy: () => {
+          bubbleView?.destroy()
+          bubbleView = undefined
+        },
+      }
+    },
   })
 }

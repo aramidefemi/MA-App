@@ -1,6 +1,7 @@
 import { convertFileSrc } from '@tauri-apps/api/core'
 import { dirname, join } from '@tauri-apps/api/path'
-import { exists, mkdir, writeFile } from '@tauri-apps/plugin-fs'
+import { basename } from '@tauri-apps/api/path'
+import { copyFile, exists, mkdir, writeFile } from '@tauri-apps/plugin-fs'
 
 const IMAGE_EXTENSIONS = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp', 'ico', 'avif',
@@ -8,11 +9,16 @@ const IMAGE_EXTENSIONS = new Set([
 
 const UNTITLED_PATH = 'untitled.md'
 
+/** @param {string} path */
+export function isImagePath(path) {
+  const ext = path.split('.').pop()?.toLowerCase()
+  return !!ext && IMAGE_EXTENSIONS.has(ext)
+}
+
 /** @param {File} file */
 export function isImageFile(file) {
   if (file.type?.startsWith('image/')) return true
-  const ext = file.name.split('.').pop()?.toLowerCase()
-  return !!ext && IMAGE_EXTENSIONS.has(ext)
+  return isImagePath(file.name)
 }
 
 /** @param {string | null | undefined} documentPath */
@@ -94,6 +100,25 @@ export async function saveDroppedImage(file, documentPath) {
   const bytes = new Uint8Array(await file.arrayBuffer())
 
   await writeFile(absolutePath, bytes)
+
+  return {
+    markdownPath: await markdownImagePath(documentPath, absolutePath),
+    alt: altFromFileName(fileName),
+  }
+}
+
+/**
+ * Copy an OS-dropped image into the document `assets/` folder (Tauri file paths).
+ * @param {string} sourcePath
+ * @param {string} documentPath
+ */
+export async function saveImageFromPath(sourcePath, documentPath) {
+  const assetsDir = await join(await dirname(documentPath), 'assets')
+  await mkdir(assetsDir, { recursive: true })
+
+  const fileName = await uniqueName(assetsDir, await basename(sourcePath))
+  const absolutePath = await join(assetsDir, fileName)
+  await copyFile(sourcePath, absolutePath)
 
   return {
     markdownPath: await markdownImagePath(documentPath, absolutePath),

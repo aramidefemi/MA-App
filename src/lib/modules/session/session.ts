@@ -5,6 +5,7 @@ export type SessionState = {
   filePath: string | null
   scrollTop: number
   typewriterScroll: boolean
+  focusMode: boolean
   showSidebar: boolean
   showOutline: boolean
   showResearch: boolean
@@ -15,6 +16,7 @@ export const DEFAULT_SESSION: SessionState = {
   filePath: null,
   scrollTop: 0,
   typewriterScroll: true,
+  focusMode: false,
   showSidebar: false,
   showOutline: false,
   showResearch: false,
@@ -28,6 +30,7 @@ export function parseSession(raw: unknown): SessionState | null {
     filePath: typeof o.filePath === 'string' ? o.filePath : null,
     scrollTop: typeof o.scrollTop === 'number' && o.scrollTop >= 0 ? o.scrollTop : 0,
     typewriterScroll: o.typewriterScroll !== false,
+    focusMode: o.focusMode === true,
     showSidebar: o.showSidebar === true,
     showOutline: o.showOutline === true,
     showResearch: o.showResearch === true,
@@ -39,6 +42,7 @@ export function buildSessionSnapshot(input: {
   filePath: string | null
   scrollTop: number
   typewriterScroll: boolean
+  focusMode: boolean
   showSidebar: boolean
   showOutline: boolean
   showResearch: boolean
@@ -48,6 +52,7 @@ export function buildSessionSnapshot(input: {
     filePath: input.filePath,
     scrollTop: Math.max(0, input.scrollTop),
     typewriterScroll: input.typewriterScroll,
+    focusMode: input.focusMode,
     showSidebar: input.showSidebar,
     showOutline: input.showOutline,
     showResearch: input.showResearch,

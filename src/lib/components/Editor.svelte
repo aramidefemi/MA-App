@@ -1,17 +1,31 @@
 <script>
   import { mount, unmount, onMount } from 'svelte'
-  import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core'
-  import { commonmark } from '@milkdown/kit/preset/commonmark'
+  import { Editor, editorViewCtx, rootCtx, defaultValueCtx } from '@milkdown/core'
+  import { session } from '../modules/session'
+  import { commonmarkIntegration } from '../editor/commonmarkIntegration.js'
   import { history } from '@milkdown/kit/plugin/history'
   import { clipboard } from '@milkdown/kit/plugin/clipboard'
   import { listener, listenerCtx } from '@milkdown/plugin-listener'
   import FormatBubbleToolbar from './FormatBubbleToolbar.svelte'
-  import { createFormatBubblePlugin } from '../editor/formatBubble.js'
-  import { createImageDisplayPlugin, createImageDropPlugin } from '../editor/imageDrop.js'
+  import SlashMenu from './SlashMenu.svelte'
+  import {
+    configureFormatBubble,
+    formatBubbleTooltip,
+  } from '../editor/formatBubble.js'
+  import { slash, applySlashMenu } from '../editor/slashIntegration.js'
+  import { cursorIntegration, configureCursor } from '../editor/cursorIntegration.js'
+  import { createImageDisplayPlugin } from '../editor/imageDrop.js'
+  import { upload, configureUpload } from '../editor/uploadIntegration.js'
+  import { setupTauriImageDrop } from '../editor/tauriImageDrop.js'
   import { createTypewriterScrollPlugin } from '../editor/typewriterScroll.js'
+  import { indent, applyIndentConfig } from '../editor/indentIntegration.js'
+  import { trailingIntegration } from '../editor/trailingIntegration.js'
+  import { wikilinkIntegration, configureWikilink } from '../editor/wikilinkIntegration.js'
+  import { focusIntegration } from '../editor/focusIntegration.js'
+  import { resolveWikilinkPath } from '../wikilinkResolve.js'
+  import { workspace } from '../modules/workspace'
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
   import { document } from '../modules/document'
-  import { session } from '../modules/session'
 
   /**
    * @type {{
@@ -38,7 +52,14 @@
   onMount(() => {
     const root = containerEl
     let disposed = false
+    let cleanupTauriDrop = () => {}
     root?.addEventListener('scroll', handleScroll, { passive: true })
+
+    cleanupTauriDrop = setupTauriImageDrop({
+      getEditor: () => editor,
+      getDocumentPath: () => document.filePath,
+      onSaveRequired: () => document.saveAs(),
+    })
 
     ;(async () => {
       const instance = await Editor.make()
@@ -46,17 +67,34 @@
           ctx.set(rootCtx, root)
           ctx.set(defaultValueCtx, document.content)
 
+          configureCursor(ctx)
+          applyIndentConfig(ctx)
+          configureUpload(ctx, {
+            getDocumentPath: () => document.filePath,
+            onSaveRequired: () => document.saveAs(),
+          })
+
+          configureWikilink(ctx, {
+            onNavigate: async (target) => {
+              const path = await resolveWikilinkPath(workspace.folderPath, target)
+              if (path) await document.openFileFromTree(path)
+            },
+          })
+
           ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
             document.setContent(markdown)
             props.onContentChange?.(markdown)
           })
-        })
-        .use(commonmark)
-        .use(history)
-        .use(clipboard)
-        .use(listener)
-        .use(
-          createFormatBubblePlugin((target, bubbleProps) => {
+
+          applySlashMenu(ctx, (target, slashProps) => {
+            const instance = mount(SlashMenu, {
+              target,
+              props: slashProps,
+            })
+            return () => unmount(instance)
+          })
+
+          configureFormatBubble(ctx, (target, bubbleProps) => {
             aiLog('Editor: mounting FormatBubbleToolbar', {
               hasOnAiClick: !!props.onAiClick,
               onAiClickType: typeof props.onAiClick,
@@ -96,12 +134,20 @@
               unmount(instance)
             }
           })
-        )
+        })
+        .use(commonmarkIntegration)
+        .use(slash)
+        .use(wikilinkIntegration)
+        .use(focusIntegration)
+        .use(indent)
+        .use(history)
+        .use(clipboard)
+        .use(trailingIntegration)
+        .use(cursorIntegration)
+        .use(upload)
+        .use(listener)
+        .use(formatBubbleTooltip)
         .use(createImageDisplayPlugin(() => document.filePath))
-        .use(createImageDropPlugin({
-          getDocumentPath: () => document.filePath,
-          onSaveRequired: () => document.saveAs(),
-        }))
         .use(createTypewriterScrollPlugin())
         .create()
 
@@ -111,10 +157,21 @@
       }
       editor = instance
       applyScrollTop()
-    })()
+    })().catch((err) => {
+      console.error('[Editor] Milkdown failed to start:', err)
+    })
+
+  $effect(() => {
+    session.focusMode
+    editor?.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      view.dispatch(view.state.tr)
+    })
+  })
 
     return () => {
       disposed = true
+      cleanupTauriDrop()
       root?.removeEventListener('scroll', handleScroll)
       editor?.destroy()
       editor = undefined

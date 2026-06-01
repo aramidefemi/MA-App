@@ -10,6 +10,7 @@
   import DocumentPreview from './lib/components/DocumentPreview.svelte'
   import FileTree from './lib/components/FileTree.svelte'
   import SidebarFileToolbar from './lib/components/SidebarFileToolbar.svelte'
+  import { displayFileName } from './lib/fileDisplay.js'
   import { createFolderInWorkspace, createMarkdownInFolder } from './lib/workspaceFiles.js'
   import OutlinePanel from './lib/components/OutlinePanel.svelte'
   import WelcomeScreen from './lib/components/WelcomeScreen.svelte'
@@ -19,12 +20,13 @@
   import SidebarToggle from './lib/components/SidebarToggle.svelte'
   import ResearchPanel from './lib/components/ResearchPanel.svelte'
   import { research } from './lib/modules/research'
-  import { document } from './lib/modules/document'
   import { ui } from './lib/modules/ui'
   import { workspace } from './lib/modules/workspace'
   import { aiLog } from './lib/debug/aiFlowLog.js'
   import { initUsageTracking } from './lib/modules/usage'
   import { session, persistSession } from './lib/modules/session'
+  import { createAutosave } from './lib/autosave.js'
+  import { document, isUntitled } from './lib/modules/document'
   import { wordGoal } from './lib/modules/wordGoal'
   import WordGoalBar from './lib/components/WordGoalBar.svelte'
   import EditorTopbar from './lib/components/EditorTopbar.svelte'
@@ -77,7 +79,7 @@
   let hasSidebar = $derived(!!folderPath && showSidebar)
   let fileName = $derived(
     filePath
-      ? filePath.split('/').pop().split('\\').pop()
+      ? displayFileName(filePath.split('/').pop().split('\\').pop())
       : null
   )
 
@@ -104,6 +106,7 @@
     research.showResearch
     session.scrollTop
     session.typewriterScroll
+    session.focusMode
     persistSession()
   })
 
@@ -125,6 +128,16 @@
   onMount(() => {
     if (getCurrentWindow().label !== 'main') return
     return initUsageTracking()
+  })
+
+  const autosave = createAutosave(() => {
+    if (!filePath || isUntitled(filePath) || !isDirty || isPreview) return
+    void document.saveFile()
+  })
+
+  $effect(() => {
+    filePath
+    autosave.cancel()
   })
 
   onMount(() => {
@@ -190,6 +203,7 @@
   }
 
   async function saveFile() {
+    autosave.cancel()
     await document.saveFile()
   }
 
@@ -295,6 +309,11 @@
       session.toggleTypewriterScroll()
       persistSession()
     }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'f') {
+      e.preventDefault()
+      session.toggleFocusMode()
+      persistSession()
+    }
     if (mod && e.shiftKey && e.key.toLowerCase() === 'l') {
       e.preventDefault()
       settings.toggleTheme()
@@ -359,6 +378,7 @@
   // ─── Content sync from editor ─────────────────────────────────
   function handleContentChange(_markdown) {
     ui.handleTopbarOnEdit()
+    autosave.schedule()
   }
 </script>
 
