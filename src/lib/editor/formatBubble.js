@@ -10,6 +10,21 @@ import {
   shift,
 } from '@floating-ui/dom'
 import { aiLog } from '../debug/aiFlowLog.js'
+import { createEditorCommands, setEditorCommands } from './editorCommands.js'
+import { pushFormatState, setFormatActions } from './formatEditorApi.js'
+
+/** @typedef {{
+ *   bold: boolean,
+ *   italic: boolean,
+ *   code: boolean,
+ *   link: boolean,
+ *   heading: number,
+ *   blockquote: boolean,
+ *   bulletList: boolean,
+ *   orderedList: boolean,
+ * }} FormatActiveState */
+
+/** @typedef {ReturnType<typeof createActions>} FormatActions */
 import {
   blockquoteSchema,
   bulletListSchema,
@@ -121,22 +136,9 @@ function shouldShowBubble(view, bubbleEl, cachedText) {
     return false
   }
 
-  const domSel = window.getSelection()
-  const anchorInEditor =
-    domSel?.anchorNode != null && view.dom.contains(domSel.anchorNode)
-
-  if (!view.hasFocus() && !anchorInEditor && !focusInBubble) {
-    aiLog('shouldShowBubble: false — no editor/bubble focus', {
-      hasFocus: view.hasFocus(),
-      anchorInEditor,
-      focusInBubble,
-      activeElement: document.activeElement?.className,
-    })
-    return false
-  }
-
+  // ProseMirror selection is authoritative; DOM focus/anchor checks are flaky
+  // right after mouseup (before focus or getSelection() settle).
   aiLog('shouldShowBubble: true', { text: text.slice(0, 80), length: text.length })
-
   return true
 }
 
@@ -198,8 +200,17 @@ export function createFormatBubblePlugin(mountToolbar) {
     let bubbleFrom = 0
     let bubbleTo = 0
     const actions = createActions(ctx)
+    const editorCommands = createEditorCommands(ctx)
+    setFormatActions(actions)
+    setEditorCommands(editorCommands)
     /** @param {string} [textOverride] */
     let refreshActive = (_textOverride) => {}
+
+    const emitFormatState = () => {
+      if (!editorView) return
+      active = getActiveState(ctx)
+      pushFormatState(active)
+    }
 
     const readSelectionText = () => {
       const view = editorView
@@ -243,6 +254,7 @@ export function createFormatBubblePlugin(mountToolbar) {
 
       const { from, to, doc, selection } = view.state
       active = getActiveState(ctx)
+      pushFormatState(active)
       const liveText = selection.empty
         ? ''
         : doc.textBetween(from, to, ' ').trim()
@@ -299,8 +311,8 @@ export function createFormatBubblePlugin(mountToolbar) {
         if (editorView) syncBubble(editorView)
       }
       if (immediate) {
-        // mouseup/keyup fire before ProseMirror applies the new selection
-        requestAnimationFrame(run)
+        // mouseup fires before ProseMirror + DOM selection fully settle
+        requestAnimationFrame(() => requestAnimationFrame(run))
         return
       }
       debounceTimer = setTimeout(run, 50)
@@ -340,6 +352,7 @@ export function createFormatBubblePlugin(mountToolbar) {
       view(view) {
         editorView = view
         document.body.appendChild(content)
+        emitFormatState()
         scheduleUpdate()
 
         return {
@@ -348,13 +361,20 @@ export function createFormatBubblePlugin(mountToolbar) {
             const { selection } = nextView.state
             const sameSelection =
               prevState && prevState.selection.eq(selection)
-            if (!sameSelection) scheduleUpdate()
+            if (!sameSelection) {
+              emitFormatState()
+              scheduleUpdate()
+            } else if (prevState && prevState.doc !== nextView.state.doc) {
+              emitFormatState()
+            }
           },
           destroy: () => {
             if (debounceTimer) clearTimeout(debounceTimer)
             hideBubble()
             cleanupAutoUpdate?.()
             refreshActive = (_textOverride) => {}
+            setFormatActions(null)
+            setEditorCommands(null)
             destroyMount()
             content.remove()
             editorView = null

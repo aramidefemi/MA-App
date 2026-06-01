@@ -1,10 +1,13 @@
 <script>
+  import { ListTree } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { getCurrentWindow } from '@tauri-apps/api/window'
   import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
   import { exportDocx, exportPdf, printDocument } from './lib/export.js'
   import { setupAppMenu } from './lib/appMenu.js'
+  import { getEditorCommands } from './lib/editor/editorCommands.js'
   import Editor from './lib/components/Editor.svelte'
+  import DocumentPreview from './lib/components/DocumentPreview.svelte'
   import FileTree from './lib/components/FileTree.svelte'
   import SidebarFileToolbar from './lib/components/SidebarFileToolbar.svelte'
   import { createFolderInWorkspace, createMarkdownInFolder } from './lib/workspaceFiles.js'
@@ -24,10 +27,12 @@
   import { session, persistSession } from './lib/modules/session'
   import { wordGoal } from './lib/modules/wordGoal'
   import WordGoalBar from './lib/components/WordGoalBar.svelte'
+  import EditorTopbar from './lib/components/EditorTopbar.svelte'
   // import { addRecentProject, loadRecentProjects, projectName } from './lib/recentProjects.js'
 
   // ─── State ────────────────────────────────────────────────────
   let filePath     = $state(null)
+  let isPreview    = $state(false)
   let content      = $state('')
   let savedContent = $state('')
   let saveStatus   = $state('idle') // 'idle' | 'saving' | 'saved' | 'error'
@@ -78,6 +83,7 @@
 
   $effect(() => {
     filePath = document.filePath
+    isPreview = document.isPreview
     content = document.content
     savedContent = document.savedContent
     saveStatus = document.saveStatus
@@ -133,6 +139,8 @@
       print: () => printDocument(fileName ?? 'Document'),
       closeTab,
       closeAll,
+      undo: () => getEditorCommands()?.undo(),
+      redo: () => getEditorCommands()?.redo(),
     })
   })
 
@@ -230,8 +238,16 @@
   }
 
   // ─── Keyboard ─────────────────────────────────────────────────
+  /** @param {KeyboardEvent} e */
+  function isEditorTarget(e) {
+    const t = e.target
+    if (!(t instanceof Element)) return false
+    return !!(t.closest('.editor-root') || t.closest('.ProseMirror'))
+  }
+
   function handleKeydown(e) {
     const mod = e.metaKey || e.ctrlKey
+    const inEditor = isEditorTarget(e)
     if (mod && e.key === 'n') {
       e.preventDefault()
       newFile()
@@ -260,11 +276,17 @@
       e.preventDefault()
       closeTab()
     }
-    if ((e.metaKey || e.ctrlKey) && e.key === 'b' && folderPath) {
+    if (
+      (e.metaKey || e.ctrlKey) &&
+      e.shiftKey &&
+      e.key.toLowerCase() === 'b' &&
+      folderPath &&
+      !inEditor
+    ) {
       e.preventDefault()
       workspace.toggleSidebar()
     }
-    if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+    if ((e.metaKey || e.ctrlKey) && e.key === '\\' && !inEditor) {
       e.preventDefault()
       workspace.toggleOutline()
     }
@@ -364,7 +386,7 @@
             <div class="sidebar-titlebar" data-tauri-drag-region>
               <SidebarToggle
                 onclick={toggleSidebar}
-                title="Hide sidebar (⌘B)"
+                title="Hide sidebar (⌘⇧B)"
               />
             </div>
             <SidebarFileToolbar
@@ -394,55 +416,14 @@
           >
             <div class="topbar-hover-zone" data-tauri-drag-region></div>
 
-            <header class="topbar" class:visible={topbarVisible}>
-              <div class="topbar-drag" data-tauri-drag-region></div>
-
-              <div class="topbar-inner">
-                {#if !hasSidebar}
-                  <div class="traffic-light-spacer"></div>
-                {/if}
-
-                {#if filePath}
-                  <div class="tabs">
-                    <div class="tab active">
-                      <span class="tab-name">{fileName}</span>
-                      {#if isDirty}<span class="tab-dot"></span>{/if}
-                    </div>
-                  </div>
-                {/if}
-
-                <div class="topbar-actions">
-                  <span class="save-indicator" class:visible={saveStatus !== 'idle'}>
-                    {#if saveStatus === 'saving'}saving…
-                    {:else if saveStatus === 'saved'}saved
-                    {:else if saveStatus === 'error'}error
-                    {/if}
-                  </span>
-                  <button
-                    type="button"
-                    class="topbar-btn"
-                    onclick={() => workspace.openSettings()}
-                    title="Settings (⌘,)"
-                    aria-label="Settings"
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <path
-                        d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"
-                        stroke="currentColor"
-                        stroke-width="1.75"
-                      />
-                      <path
-                        d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"
-                        stroke="currentColor"
-                        stroke-width="1.75"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      />
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </header>
+            <EditorTopbar
+              fileName={fileName}
+              isDirty={isDirty}
+              topbarVisible={topbarVisible}
+              hasSidebar={hasSidebar}
+              saveStatus={saveStatus}
+              onOpenSettings={() => workspace.openSettings()}
+            />
           </div>
 
           {#if folderPath && !hasSidebar}
@@ -450,36 +431,26 @@
               <SidebarToggle
                 variant="float"
                 onclick={toggleSidebar}
-                title="Show sidebar (⌘B)"
+                title="Show sidebar (⌘⇧B)"
               />
             </div>
           {/if}
-
-          <button
-            class="outline-float"
-            class:active={showOutline}
-            onclick={() => workspace.toggleOutline()}
-            title="Document outline (⌘\)"
-            aria-label="Toggle outline"
-          >
-            <svg width="13" height="11" viewBox="0 0 13 11" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="0" y="0" width="13" height="1.5" rx="0.75" fill="currentColor"/>
-              <rect x="2" y="4" width="9" height="1.5" rx="0.75" fill="currentColor"/>
-              <rect x="4" y="8" width="6" height="1.5" rx="0.75" fill="currentColor"/>
-            </svg>
-          </button>
-
+ 
           <div class="editor-wrap">
             {#if filePath}
               {#key filePath}
-                <Editor
-                  onContentChange={handleContentChange}
-                  onAiClick={openResearchWithText}
-                />
+                {#if isPreview}
+                  <DocumentPreview path={filePath} />
+                {:else}
+                  <Editor
+                    onContentChange={handleContentChange}
+                    onAiClick={openResearchWithText}
+                  />
+                {/if}
               {/key}
             {:else}
               <div class="folder-prompt">
-                <p>Select a markdown file from the sidebar</p>
+                <p>Select a file from the sidebar</p>
                 <span class="folder-prompt-path">{ui.formatDisplayPath(folderPath)}</span>
               </div>
             {/if}
@@ -550,6 +521,7 @@
 
   .topbar-reveal.expanded {
     height: 38px;
+    overflow: visible;
   }
 
   .topbar-hover-zone {
@@ -561,145 +533,6 @@
 
   .topbar-reveal.expanded .topbar-hover-zone {
     display: none;
-  }
-
-  /* ─── Topbar ─────────────────────────────────────────── */
-  .topbar {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 38px;
-    background: var(--surface);
-    border-bottom: 1px solid var(--border);
-    transform: translateY(-100%);
-    opacity: 0;
-    pointer-events: none;
-    transition: transform 0.2s ease, opacity 0.2s ease;
-  }
-
-  .topbar.visible {
-    transform: translateY(0);
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  /* full-width drag layer behind topbar content */
-  .topbar-drag {
-    position: absolute;
-    inset: 0;
-    z-index: 0;
-    -webkit-app-region: drag;
-  }
-
-  .topbar-inner {
-    position: relative;
-    z-index: 1;
-    display: flex;
-    align-items: stretch;
-    height: 100%;
-    pointer-events: none;
-  }
-
-  /* space for macOS traffic lights (red/yellow/green) */
-  .traffic-light-spacer {
-    width: 80px;
-    flex-shrink: 0;
-  }
-
-  /* ─── Tab strip ──────────────────────────────────────── */
-  .tabs {
-    display: flex;
-    align-items: stretch;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .tab {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 0 14px;
-    font-size: 18px;
-    font-family: var(--font-ui);
-    color: var(--text-dim);
-    border-right: 1px solid var(--border);
-    cursor: default;
-    position: relative;
-    max-width: 200px;
-    transition: background 0.1s;
-  }
-
-  .tab.active {
-    background: var(--bg);
-    color: var(--text);
-    /* bottom line to indicate active tab */
-    box-shadow: inset 0 -1px 0 0 var(--bg);
-  }
-
-  /* cancel the border-bottom of topbar under the active tab */
-  .tab.active::after {
-    content: '';
-    position: absolute;
-    bottom: -1px;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--bg);
-  }
-
-  .tab-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    letter-spacing: 0.02em;
-  }
-
-  .tab-dot {
-    display: inline-block;
-    width: 5px;
-    height: 5px;
-    border-radius: 50%;
-    background: var(--accent);
-    flex-shrink: 0;
-    opacity: 0.9;
-  }
-
-  /* ─── Right actions ──────────────────────────────────── */
-  .topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 0 12px;
-    margin-left: auto;
-    pointer-events: auto;
-  }
-
-  .save-indicator {
-    font-size: 10px;
-    color: var(--text-dim);
-    letter-spacing: 0.06em;
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  .save-indicator.visible { opacity: 1; }
-
-  .topbar-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 4px;
-    background: none;
-    border: none;
-    border-radius: var(--radius);
-    color: var(--text-dim);
-    cursor: pointer;
-    transition: color 0.15s, background 0.15s;
-  }
-
-  .topbar-btn:hover {
-    color: var(--text);
-    background: color-mix(in srgb, var(--surface) 70%, var(--text) 8%);
   }
 
   .outline-float {

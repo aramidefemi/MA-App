@@ -1,6 +1,7 @@
 import { load } from '@tauri-apps/plugin-store'
 import { exists } from '@tauri-apps/plugin-fs'
 import { document, isUntitled } from '../document'
+import { isPreviewFile } from '../../workspaceFileTypes.js'
 import { workspace } from '../workspace'
 import { research } from '../research'
 import {
@@ -84,7 +85,11 @@ async function resolveForRestore(raw: SessionState): Promise<SessionState> {
 
 async function applySession(state: SessionState): Promise<void> {
   if (state.folderPath) workspace.restoreFolder(state.folderPath, state.showSidebar)
-  if (state.filePath) await document.loadFileAt(state.filePath)
+  if (state.filePath) {
+    const name = state.filePath.split(/[/\\]/).pop() ?? state.filePath
+    if (isPreviewFile(name)) await document.openPreviewAt(state.filePath)
+    else await document.loadFileAt(state.filePath)
+  }
   workspace.restorePanels(state.showOutline)
   research.restorePanel(state.showResearch)
   scrollTop = state.scrollTop

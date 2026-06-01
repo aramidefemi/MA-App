@@ -12,6 +12,8 @@ import { app } from './app.js'
  *   print: () => void | Promise<void>,
  *   closeTab: () => void | Promise<void>,
  *   closeAll: () => void | Promise<void>,
+ *   undo?: () => void,
+ *   redo?: () => void,
  * }} FileMenuHandlers */
 
 /**
@@ -110,10 +112,17 @@ export async function setupAppMenu(handlers) {
   const editSubmenu = await Submenu.new({
     text: 'Edit',
     items: [
-      await PredefinedMenuItem.new({ item: 'Undo', accelerator: 'CmdOrCtrl+Z' }),
-      await PredefinedMenuItem.new({
-        item: 'Redo',
+      await MenuItem.new({
+        id: 'edit-undo',
+        text: 'Undo',
+        accelerator: 'CmdOrCtrl+Z',
+        action: () => handlers.undo?.(),
+      }),
+      await MenuItem.new({
+        id: 'edit-redo',
+        text: 'Redo',
         accelerator: 'CmdOrCtrl+Shift+Z',
+        action: () => handlers.redo?.(),
       }),
       await PredefinedMenuItem.new({ item: 'Separator' }),
       await PredefinedMenuItem.new({ item: 'Cut', accelerator: 'CmdOrCtrl+X' }),

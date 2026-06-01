@@ -1,4 +1,5 @@
 <script>
+  import { FileText, FolderOpen, PenLine } from '@lucide/svelte'
   import { app } from '../app.js'
   import appIcon from '../../../app-icon.svg'
 
@@ -33,44 +34,21 @@
   <div class="actions">
     <button type="button" class="action-card" onclick={onStartWriting}>
       <span class="action-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M12.5 3.5 16.5 7.5 7 17H3v-4l9.5-9.5Z"
-            stroke="currentColor"
-            stroke-width="1.4"
-            stroke-linejoin="round"
-          />
-          <path d="M11 5l4 4" stroke="currentColor" stroke-width="1.4" />
-        </svg>
+        <PenLine size={20} strokeWidth={1.5} />
       </span>
       <span class="action-label">Start writing</span>
     </button>
 
     <button type="button" class="action-card" onclick={onOpenFile}>
       <span class="action-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M11 2H5a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7l-6-5Z"
-            stroke="currentColor"
-            stroke-width="1.4"
-            stroke-linejoin="round"
-          />
-          <path d="M11 2v5h5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round" />
-        </svg>
+        <FileText size={20} strokeWidth={1.5} />
       </span>
       <span class="action-label">Open file</span>
     </button>
 
     <button type="button" class="action-card" onclick={onOpenFolder}>
       <span class="action-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path
-            d="M3 6a2 2 0 0 1 2-2h3l2 2h5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
-            stroke="currentColor"
-            stroke-width="1.4"
-            stroke-linejoin="round"
-          />
-        </svg>
+        <FolderOpen size={20} strokeWidth={1.5} />
       </span>
       <span class="action-label">Open folder</span>
     </button>

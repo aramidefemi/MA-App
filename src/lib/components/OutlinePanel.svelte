@@ -6,35 +6,12 @@
      */
     import { document as doc } from '../modules/document'
     import { workspace } from '../modules/workspace'
-    import { suspendTypewriterScroll } from '../editor/typewriterScroll.js'
+    import { jumpToHeading, parseHeadings } from '../markdown/headings.js'
 
-    // ─── Parse headings from markdown ──────────────────────
+    let headings = $derived(parseHeadings(doc.content, 4))
 
-    let headings = $derived(parseHeadings(doc.content))
-  
-    function parseHeadings(markdown) {
-      return markdown
-        .split('\n')
-        .filter(line => /^#{1,4}\s/.test(line))
-        .map((line, i) => {
-          const match = line.match(/^(#{1,4})\s+(.+)/)
-          if (!match) return null
-          return { level: match[1].length, text: match[2].trim(), index: i }
-        })
-        .filter(Boolean)
-    }
-  
-    // ─── Scroll to heading in editor ───────────────────────
     function jumpTo(text) {
-      suspendTypewriterScroll()
-      const selectors = 'h1, h2, h3, h4'
-      const nodes = globalThis.document.querySelectorAll(`.milkdown .ProseMirror ${selectors}`)
-      for (const node of nodes) {
-        if (node.textContent.trim() === text) {
-          node.scrollIntoView({ behavior: 'smooth', block: 'start' })
-          break
-        }
-      }
+      jumpToHeading(text)
       workspace.closeOutline()
     }
   

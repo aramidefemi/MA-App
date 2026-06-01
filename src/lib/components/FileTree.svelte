@@ -1,5 +1,6 @@
 <script>
   import { readDir } from '@tauri-apps/plugin-fs'
+  import { isWriterSourceFile } from '../workspaceFileTypes.js'
 
   let { rootPath = '', activeFile = '', onSelect } = $props()
   let entries = $state([])
@@ -60,7 +61,7 @@
 
       const path = joinPath(folderPath, entry.name)
       if (entry.isDirectory) dirs.push({ path, name: entry.name, depth, isDir: true })
-      if (entry.isFile && isMarkdown(entry.name)) {
+      if (entry.isFile && isWriterSourceFile(entry.name)) {
         files.push({ path, name: entry.name, depth, isDir: false })
       }
     }
@@ -99,11 +100,6 @@
     return name.startsWith('.') || name === 'node_modules'
   }
 
-  function isMarkdown(name) {
-    const lower = name.toLowerCase()
-    return lower.endsWith('.md') || lower.endsWith('.markdown')
-  }
-
   function joinPath(parent, name) {
     const separator = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
     return parent.endsWith('/') || parent.endsWith('\\')
@@ -119,7 +115,7 @@
   const sortByName = (a, b) => a.name.localeCompare(b.name)
 </script>
 
-<div class="file-tree" role="tree" aria-label="Markdown files">
+<div class="file-tree" role="tree" aria-label="Workspace files">
   {#each visibleEntries as entry (entry.path)}
     <button
       type="button"

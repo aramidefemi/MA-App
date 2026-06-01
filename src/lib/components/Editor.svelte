@@ -2,6 +2,8 @@
   import { mount, unmount, onMount } from 'svelte'
   import { Editor, rootCtx, defaultValueCtx } from '@milkdown/core'
   import { commonmark } from '@milkdown/kit/preset/commonmark'
+  import { history } from '@milkdown/kit/plugin/history'
+  import { clipboard } from '@milkdown/kit/plugin/clipboard'
   import { listener, listenerCtx } from '@milkdown/plugin-listener'
   import FormatBubbleToolbar from './FormatBubbleToolbar.svelte'
   import { createFormatBubblePlugin } from '../editor/formatBubble.js'
@@ -50,6 +52,8 @@
           })
         })
         .use(commonmark)
+        .use(history)
+        .use(clipboard)
         .use(listener)
         .use(
           createFormatBubblePlugin((target, bubbleProps) => {

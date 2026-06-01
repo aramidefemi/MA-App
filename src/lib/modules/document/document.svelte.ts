@@ -1,6 +1,7 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { app } from '../../app.js'
+import { isEditableInEditor, isPreviewFile } from '../../workspaceFileTypes.js'
 
 export const UNTITLED_PATH = 'untitled.md'
 
@@ -10,8 +11,10 @@ let filePath = $state<string | null>(null)
 let content = $state('')
 let savedContent = $state('')
 let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle')
+let previewMode = $state(false)
 
-const isDirty = $derived(content !== savedContent)
+const isDirty = $derived(!previewMode && content !== savedContent)
+const isPreview = $derived(previewMode && !!filePath)
 const fileName = $derived(
   filePath
     ? filePath.split('/').pop()!.split('\\').pop()!
@@ -29,12 +32,22 @@ function resetSaveStatusLater() {
 
 async function loadFileAt(path: string) {
   const text = await readTextFile(path)
+  previewMode = false
   filePath = path
   content = text
   savedContent = text
 }
 
+async function openPreviewAt(path: string) {
+  previewMode = true
+  filePath = path
+  content = ''
+  savedContent = ''
+  saveStatus = 'idle'
+}
+
 async function saveFile() {
+  if (previewMode) return
   if (!filePath || isUntitled(filePath)) {
     await saveAs()
     return
@@ -69,6 +82,7 @@ async function saveAs() {
 }
 
 function startWriting() {
+  previewMode = false
   filePath = UNTITLED_PATH
   content = ''
   savedContent = ''
@@ -84,6 +98,7 @@ async function closeTab() {
   filePath = null
   content = ''
   savedContent = ''
+  previewMode = false
 }
 
 function setContent(markdown: string) {
@@ -101,7 +116,9 @@ async function openFile() {
 
 async function openFileFromTree(path: string) {
   if (isDirty) await saveFile()
-  await loadFileAt(path)
+  const name = path.split(/[/\\]/).pop() ?? path
+  if (isPreviewFile(name)) await openPreviewAt(path)
+  else if (isEditableInEditor(name)) await loadFileAt(path)
 }
 
 export const document = {
@@ -110,8 +127,10 @@ export const document = {
   get savedContent() { return savedContent },
   get saveStatus() { return saveStatus },
   get isDirty() { return isDirty },
+  get isPreview() { return isPreview },
   get fileName() { return fileName },
   loadFileAt,
+  openPreviewAt,
   saveFile,
   saveAs,
   startWriting,

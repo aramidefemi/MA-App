@@ -40,7 +40,7 @@ What we didn't add is the feature.
 
 ***
 
-## Who actually uses this
+## Who actually uses thisjbsdfbvdv
 
 Devs who vibe-code and end up with 40 `.md` files — architecture notes,
 decision logs, PR checklists. You don't want VS Code for that. You want
@@ -69,10 +69,22 @@ Harder to ship than it sounds — which is why it's V2.
 | `⌘O` | Open file |
 | `⌘⇧O` | Open folder |
 | `⌘S` | Save |
-| `⌘B` | Toggle sidebar |
+| `⌘⇧B` | Toggle sidebar |
 | `⌘\` | Toggle outline panel |
 | `⌘⇧T` | Toggle typewriter scrolling |
 | `Esc` | Dismiss panels |
+
+**Editor** (when focus is in the document):
+
+| Shortcut | Action |
+|----------|--------|
+| `⌘Z` | Undo |
+| `⌘⇧Z` | Redo |
+| `⌘B` | Bold |
+| `⌘I` | Italic |
+| `⌘⌥1`–`⌘⌥6` | Heading 1–6 |
+| `⌘⌥7` | Ordered list |
+| `⌘⌥8` | Bullet list |
 
 ***
 
@@ -91,12 +103,12 @@ npm run tauri build   # production build for your current OS
 
 ## V1 scope
 
-Open a `.md` file or folder. Edit inline — `##` becomes a heading,
+Open a `.md` f***ile or folde***r. Edit inline — `##` becomes a heading,
 `**bold**` renders bold, tables render as tables. Save with `⌘S`.
 
 ## Coming next
 
-Slash commands → inline AI. Ghost text on pause. Light mode. Multiple tabs.
+Slash commands → inline AI..jg g . Ghost text on pause. Light mode. Multiple tabs.
 Full roadmap in `ROADMAP.md`.
 
 ***

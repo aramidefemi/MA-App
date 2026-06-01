@@ -1,4 +1,5 @@
 <script>
+  import { Code, Ellipsis, Link, List, ListOrdered, Quote } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
 
@@ -42,11 +43,8 @@
     if (snapshot.heading >= 4 || snapshot.code || snapshot.link) expanded = true
   }
 
-  $effect.pre(() => {
-    registerRefresh(refresh)
-  })
-
   onMount(() => {
+    registerRefresh(refresh)
     aiLog('FormatBubbleToolbar.mounted', {
       hasOnAiClick: !!onAiClick,
       onAiClickType: typeof onAiClick,
@@ -163,9 +161,7 @@
         aria-pressed={snapshot.code}
         onclick={() => act(() => actions.code())}
       >
-        <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path d="M4.2 3 2 6l2.2 3M7.8 3 10 6 7.8 9" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <Code size={12} strokeWidth={1.75} aria-hidden="true" />
       </button>
       <button
         type="button"
@@ -176,10 +172,7 @@
         aria-pressed={snapshot.link}
         onclick={() => act(() => actions.link())}
       >
-        <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-          <path d="M5.2 6.8a2.2 2.2 0 0 0 3.1 0l1.4-1.4a2.2 2.2 0 0 0-3.1-3.1L6.3 3.2" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-          <path d="M6.8 5.2a2.2 2.2 0 0 0-3.1 0L2.3 6.6a2.2 2.2 0 0 0 3.1 3.1l1.4-1.4" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-        </svg>
+        <Link size={12} strokeWidth={1.75} aria-hidden="true" />
       </button>
     {/if}
   </div>
@@ -229,9 +222,7 @@
       aria-pressed={snapshot.blockquote}
       onclick={() => act(() => actions.blockquote())}
     >
-      <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M3 3h2v5H3V3zm4 0h2v5H7V3z" fill="currentColor"/>
-      </svg>
+      <Quote size={12} strokeWidth={1.75} aria-hidden="true" />
     </button>
     <button
       type="button"
@@ -242,12 +233,7 @@
       aria-pressed={snapshot.bulletList}
       onclick={() => act(() => actions.bulletList())}
     >
-      <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <circle cx="2" cy="3" r="1" fill="currentColor"/>
-        <circle cx="2" cy="6" r="1" fill="currentColor"/>
-        <circle cx="2" cy="9" r="1" fill="currentColor"/>
-        <path d="M4.5 3h5.5M4.5 6h5.5M4.5 9h5.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-      </svg>
+      <List size={12} strokeWidth={1.75} aria-hidden="true" />
     </button>
     <button
       type="button"
@@ -258,10 +244,7 @@
       aria-pressed={snapshot.orderedList}
       onclick={() => act(() => actions.orderedList())}
     >
-      <svg class="glyph" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-        <path d="M2 2.5v2M2 2.5h.8M1.5 6.5h1v1.5H2M2 9.5V11M1.5 9.5h1" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
-        <path d="M4.5 3h5.5M4.5 6h5.5M4.5 9h5.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
-      </svg>
+      <ListOrdered size={12} strokeWidth={1.75} aria-hidden="true" />
     </button>
   </div>
 
@@ -276,11 +259,7 @@
     aria-expanded={expanded}
     onclick={toggleMore}
   >
-    <svg class="glyph ellipsis" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-      <circle cx="2.5" cy="6" r="1.1" fill="currentColor"/>
-      <circle cx="6" cy="6" r="1.1" fill="currentColor"/>
-      <circle cx="9.5" cy="6" r="1.1" fill="currentColor"/>
-    </svg>
+    <Ellipsis size={12} strokeWidth={1.75} aria-hidden="true" />
   </button>
 
   <div class="caret" aria-hidden="true"></div>
@@ -297,7 +276,6 @@
     --bubble-btn-min: 34px;
     --bubble-heading-fs: 12px;
     --bubble-icon-fs: 14px;
-    --bubble-glyph: 14px;
     --bubble-pad-y: 6px;
     --bubble-pad-x: 8px;
     --bubble-gap: 3px;
@@ -401,16 +379,6 @@
   .btn em {
     font-style: italic;
     font-weight: 500;
-  }
-
-  .glyph {
-    width: var(--bubble-glyph);
-    height: var(--bubble-glyph);
-    flex-shrink: 0;
-  }
-
-  .ellipsis {
-    width: calc(var(--bubble-glyph) + 2px);
   }
 
   .caret {

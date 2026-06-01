@@ -1,4 +1,5 @@
 <script>
+  import { ArrowUp } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { streamResponse, formatAiTiming } from '../services/ai.js'
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
@@ -279,9 +280,7 @@
         disabled={!draftInput.trim() || isStreaming}
         onclick={submitChat}
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-          <path d="M7 2.5V11.5M7 2.5L3.5 6M7 2.5L10.5 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <ArrowUp size={14} strokeWidth={1.5} aria-hidden="true" />
       </button>
     </div>
   </div>
