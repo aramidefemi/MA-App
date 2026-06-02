@@ -1,5 +1,6 @@
 import { hasApiKey } from './keys.js'
 import { getAnonymousId } from '../modules/usage/anonymousId.js'
+import { getAiSkillPrompt } from '../ai/skills/index.js'
 
 /** Nano 8B — much faster TTFT than the 49B super model on free/shared keys. */
 const DEFAULT_MODEL = 'nvidia/llama-3.1-nemotron-nano-8b-v1'
@@ -31,33 +32,59 @@ Rules:
 - Never start with "Certainly" or "Of course" or "Great question".`
 }
 
-/** @param {'explain'|'ask'} mode @param {string} [documentText] @param {string} [context] */
-function buildSystemPrompt(mode, documentText, context) {
-  if (mode === 'explain' && context?.trim()) return PROMPTS[mode]
+/**
+ * @param {'explain'|'ask'} mode
+ * @param {string} [documentText]
+ * @param {string} [context]
+ * @param {string} [skillPrompt]
+ */
+function buildSystemPrompt(mode, documentText, context, skillPrompt) {
+  const basePrompt = (() => {
+    if (mode === 'explain' && context?.trim()) return PROMPTS[mode]
 
-  const doc = documentText?.trim()
-  if (!doc) return PROMPTS[mode]
+    const doc = documentText?.trim()
+    if (!doc) return PROMPTS[mode]
 
-  const capped =
-    doc.length > MAX_DOC_CHARS ? doc.slice(-MAX_DOC_CHARS) : doc
-  const truncatedNote =
-    doc.length > MAX_DOC_CHARS ? '\n(Document excerpt: end of file only.)' : ''
+    const capped =
+      doc.length > MAX_DOC_CHARS ? doc.slice(-MAX_DOC_CHARS) : doc
+    const truncatedNote =
+      doc.length > MAX_DOC_CHARS ? '\n(Document excerpt: end of file only.)' : ''
 
-  return `${PROMPTS[mode]}
+    return `${PROMPTS[mode]}
 
 The user's current document:
 ---
 ${capped}
 ---${truncatedNote}`
+  })()
+
+  const trimmedSkillPrompt = skillPrompt?.trim()
+  if (!trimmedSkillPrompt) return basePrompt
+
+  return `${basePrompt}
+
+Writing skill to apply when relevant:
+---
+${trimmedSkillPrompt}
+---`
 }
 
-/** @param {'explain'|'ask'} mode @param {string} input @param {string} [context] @param {string} [documentText] */
-function buildMessages(mode, input, context, documentText) {
+/**
+ * @param {'explain'|'ask'} mode
+ * @param {string} input
+ * @param {string} [context]
+ * @param {string} [documentText]
+ * @param {string} [skillPrompt]
+ */
+function buildMessages(mode, input, context, documentText, skillPrompt) {
   const userMessage = context
     ? `Context from my document:\n"${context}"\n\n${input}`
     : input
   return [
-    { role: 'system', content: buildSystemPrompt(mode, documentText, context) },
+    {
+      role: 'system',
+      content: buildSystemPrompt(mode, documentText, context, skillPrompt)
+    },
     { role: 'user', content: userMessage }
   ]
 }
@@ -219,6 +246,8 @@ async function streamViaProxy(messages, { onToken, onDone, onError, onFirstToken
  * @param {string} options.input
  * @param {string} [options.context]
  * @param {string} [options.documentText]
+ * @param {string} [options.skillId]
+ * @param {string} [options.skillPrompt]
  * @param {function} options.onToken
  * @param {function(options: { totalMs: number, ttftMs: number }): void} options.onDone
  * @param {function} options.onError
@@ -229,12 +258,21 @@ export async function streamResponse({
   input,
   context,
   documentText,
+  skillId,
+  skillPrompt,
   onToken,
   onDone,
   onError,
   onFirstToken
 }) {
-  const messages = buildMessages(mode, input, context, documentText)
+  const resolvedSkillPrompt = skillPrompt?.trim() || getAiSkillPrompt(skillId)
+  const messages = buildMessages(
+    mode,
+    input,
+    context,
+    documentText,
+    resolvedSkillPrompt
+  )
   await streamViaProxy(messages, { onToken, onDone, onError, onFirstToken })
 }
 

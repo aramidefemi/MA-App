@@ -1,12 +1,12 @@
 <script>
-  import { Settings, User } from '@lucide/svelte'
+
   import {
     getDocumentStats,
     formatReadingTime,
   } from '../documentStats.js'
   import { document } from '../modules/document'
   import { workspace } from '../modules/workspace'
-  import Tooltip from './Tooltip.svelte'
+  
 
   let stats = $derived(getDocumentStats(document.content))
   let readingTime = $derived(formatReadingTime(stats.readingSeconds))
@@ -31,25 +31,6 @@
       <span class="stat-label">reading time</span>
     </p>
   </div>
-
-  <div class="meta-actions" role="group" aria-label="Account and settings">
-    <Tooltip text="Account & API keys" fill>
-      <button type="button" class="meta-btn" aria-label="Profile" onclick={openProfile}>
-        <User size={22} strokeWidth={1.75} aria-hidden="true" />
-      </button>
-    </Tooltip>
-
-    <Tooltip text="App settings" fill>
-      <button
-        type="button"
-        class="meta-btn"
-        aria-label="Settings"
-        onclick={() => workspace.openSettings()}
-      >
-        <Settings size={22} strokeWidth={1.75} aria-hidden="true" />
-      </button>
-    </Tooltip>
-  </div>
 </div>
 
 <style>
@@ -58,7 +39,7 @@
     padding: 10px 12px 12px;
     border-top: 1px solid var(--border);
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: 12px;
   }
 
   .stat-lines {
@@ -89,23 +70,29 @@
 
   .meta-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
   }
 
   .meta-btn {
     display: flex;
     align-items: center;
     justify-content: center;
-
+    width: 28px;
+    height: 28px;
+    padding: 0;
     background: color-mix(in srgb, var(--surface) 88%, var(--text) 4%);
     border: none;
     border-radius: var(--radius);
     color: var(--text);
     cursor: pointer;
-    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    transition: color 0.15s, background 0.15s;
   }
 
   .meta-btn:hover {
     background: color-mix(in srgb, var(--surface) 82%, var(--text) 12%);
+  }
+
+  .meta-btn:active {
+    background: color-mix(in srgb, var(--surface) 78%, var(--text) 16%);
   }
 </style>

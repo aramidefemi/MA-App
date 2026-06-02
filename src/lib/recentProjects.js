@@ -1,7 +1,7 @@
 import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 
 const STORE_FILE = 'recent-projects.json'
-const MAX_ENTRIES = 10
+export const MAX_ENTRIES = 10
 
 /** @typedef {{ type: 'file' | 'folder', path: string, name: string, openedAt: number }} RecentProject */
 

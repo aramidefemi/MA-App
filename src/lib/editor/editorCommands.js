@@ -1,12 +1,15 @@
 import { commandsCtx, editorViewCtx } from '@milkdown/core'
 import { undoCommand, redoCommand } from '@milkdown/kit/plugin/history'
 import { undoDepth, redoDepth } from '@milkdown/prose/history'
+import { findNextInView, findPreviousInView } from './findInEditor.js'
 
 /** @typedef {{
  *   undo: () => void,
  *   redo: () => void,
  *   canUndo: () => boolean,
  *   canRedo: () => boolean,
+ *   findNext: (query: string) => boolean,
+ *   findPrevious: (query: string) => boolean,
  * }} EditorCommands */
 
 /** @type {EditorCommands | null} */
@@ -24,15 +27,19 @@ export function getEditorCommands() {
 
 /** @param {import('@milkdown/ctx').Ctx} ctx */
 export function createEditorCommands(ctx) {
+  const view = () => ctx.get(editorViewCtx)
+
   const run = (key) => {
     ctx.get(commandsCtx).call(key)
-    ctx.get(editorViewCtx).focus()
+    view().focus()
   }
 
   return {
     undo: () => run(undoCommand.key),
     redo: () => run(redoCommand.key),
-    canUndo: () => undoDepth(ctx.get(editorViewCtx).state) > 0,
-    canRedo: () => redoDepth(ctx.get(editorViewCtx).state) > 0,
+    canUndo: () => undoDepth(view().state) > 0,
+    canRedo: () => redoDepth(view().state) > 0,
+    findNext: (query) => findNextInView(view(), query),
+    findPrevious: (query) => findPreviousInView(view(), query),
   }
 }

@@ -49,6 +49,11 @@ function restorePanels(outline: boolean) {
   showOutline = outline
 }
 
+function closeFolder() {
+  folderPath = null
+  showSidebar = false
+}
+
 export const workspace = {
   get folderPath() { return folderPath },
   get showSidebar() { return showSidebar },
@@ -65,4 +70,5 @@ export const workspace = {
   closeOutline,
   restoreFolder,
   restorePanels,
+  closeFolder,
 }

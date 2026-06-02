@@ -7,6 +7,21 @@
     "core:window:allow-start-dragging",
     "dialog:allow-open",
     "dialog:allow-save",
+    "dialog:allow-confirm",
+    "clipboard-manager:allow-write-text",
+    {
+      "identifier": "fs:scope",
+      "allow": [
+        { "path": "$HOME/**" },
+        { "path": "$DOCUMENT/**" },
+        { "path": "$DESKTOP/**" },
+        { "path": "$DOWNLOAD/**" },
+        { "path": "$TEMP/**" },
+        { "path": "$APPDATA/**" },
+        { "path": "$APPLOCALDATA/**" },
+        { "path": "/Volumes/**" }
+      ]
+    },
     "fs:allow-read-dir",
     "fs:allow-read-text-file",
     "fs:allow-read-file",
@@ -15,11 +30,15 @@
     "fs:allow-appdata-read-recursive",
     "fs:allow-appdata-write-recursive",
     "fs:allow-exists",
+    "fs:allow-stat",
     "fs:allow-mkdir",
+    "fs:allow-rename",
+    "fs:allow-remove",
     "store:allow-load",
     "store:allow-get",
     "store:allow-set",
     "store:allow-save",
-    "store:allow-delete"
+    "store:allow-delete",
+    "opener:allow-reveal-item-in-dir"
   ]
 }

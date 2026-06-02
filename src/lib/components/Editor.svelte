@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte'
+  import { onMount, tick } from 'svelte'
   import { editorViewCtx } from '@milkdown/core'
   import { session } from '../modules/session'
   import { createCrepe, uploadImageFile } from '../editor/crepeConfig.js'
@@ -23,7 +23,8 @@
 
   let containerEl = $state()
   /** @type {import('@milkdown/crepe').Crepe | undefined} */
-  let crepe
+  let crepe = $state()
+  let initError = $state(null)
 
   function applyScrollTop() {
     if (containerEl && session.scrollTop > 0) {
@@ -35,71 +36,84 @@
     if (containerEl) session.setScrollTop(containerEl.scrollTop)
   }
 
+  $effect(() => {
+    session.focusMode
+    crepe?.editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx)
+      view.dispatch(view.state.tr)
+    })
+  })
+
   onMount(() => {
-    const root = containerEl
     let disposed = false
-    root?.addEventListener('scroll', handleScroll, { passive: true })
-
-    const cleanupTauriDrop = setupTauriImageDrop({
-      getEditor: () => crepe?.editor,
-      getDocumentPath: () => document.filePath,
-      onSaveRequired: () => document.saveAs(),
-    })
-
-    const instance = createCrepe({
-      root,
-      defaultValue: document.content,
-      onAiClick: props.onAiClick,
-      onNavigateWikilink: async (target) => {
-        const path = await resolveWikilinkPath(workspace.folderPath, target)
-        if (path) await document.openFileFromTree(path)
-      },
-      onUploadImage: (file) =>
-        uploadImageFile(
-          {
-            getDocumentPath: () => document.filePath,
-            onSaveRequired: () => document.saveAs(),
-          },
-          file,
-        ),
-    })
     /** @type {import('@milkdown/crepe').Crepe | undefined} */
-    let active = instance
+    let active
+    let cleanupTauriDrop = () => {}
+    /** @type {HTMLElement | undefined} */
+    let root
 
-    instance.editor
-      .use(wikilinkIntegration)
-      .use(focusIntegration)
-      .use(createTypewriterScrollPlugin())
+    void (async () => {
+      await tick()
+      root = containerEl
+      if (!root || disposed) {
+        if (!root && !disposed) initError = 'Editor failed to mount'
+        return
+      }
 
-    instance.on((listener) => {
-      listener.markdownUpdated((_ctx, markdown) => {
-        document.setContent(markdown)
-        props.onContentChange?.(markdown)
+      root.addEventListener('scroll', handleScroll, { passive: true })
+
+      cleanupTauriDrop = setupTauriImageDrop({
+        getEditor: () => crepe?.editor,
+        getDocumentPath: () => document.filePath,
+        onSaveRequired: () => document.saveAs(),
       })
-    })
 
-    instance
-      .create()
-      .then(() => {
+      const instance = createCrepe({
+        root,
+        defaultValue: document.content,
+        onAiClick: props.onAiClick,
+        onNavigateWikilink: async (target) => {
+          const path = await resolveWikilinkPath(workspace.folderPath, target)
+          if (path) await document.openFileFromTree(path)
+        },
+        onUploadImage: (file) =>
+          uploadImageFile(
+            {
+              getDocumentPath: () => document.filePath,
+              onSaveRequired: () => document.saveAs(),
+            },
+            file,
+          ),
+      })
+      active = instance
+
+      instance.editor
+        .use(wikilinkIntegration)
+        .use(focusIntegration)
+        .use(createTypewriterScrollPlugin())
+
+      instance.on((listener) => {
+        listener.markdownUpdated((_ctx, markdown) => {
+          document.setContent(markdown)
+          props.onContentChange?.(markdown)
+        })
+      })
+
+      try {
+        await instance.create()
         if (disposed) {
           void instance.destroy()
           return
         }
         wireCrepeApis(instance.editor)
         crepe = active
+        initError = null
         applyScrollTop()
-      })
-      .catch((err) => {
+      } catch (err) {
         console.error('[Editor] Crepe failed to start:', err)
-      })
-
-    $effect(() => {
-      session.focusMode
-      crepe?.editor.action((ctx) => {
-        const view = ctx.get(editorViewCtx)
-        view.dispatch(view.state.tr)
-      })
-    })
+        initError = err instanceof Error ? err.message : String(err)
+      }
+    })()
 
     return () => {
       disposed = true
@@ -115,7 +129,11 @@
   })
 </script>
 
-<div class="editor-root milkdown" bind:this={containerEl}></div>
+<div class="editor-root milkdown" bind:this={containerEl}>
+  {#if initError}
+    <p class="editor-error">Editor failed to load: {initError}</p>
+  {/if}
+</div>
 
 <style>
   .editor-root {
@@ -123,5 +141,12 @@
     height: 100%;
     overflow-y: auto;
     background: var(--crepe-color-background);
+  }
+
+  .editor-error {
+    margin: 24px;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--crepe-color-error);
   }
 </style>

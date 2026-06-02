@@ -3,6 +3,7 @@
   import { onMount } from 'svelte'
   import { streamResponse, formatAiTiming } from '../services/ai.js'
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
+  import { renderAiMarkdown } from '../markdown/renderAiMarkdown.js'
   import { research } from '../modules/research'
   import { document } from '../modules/document'
 
@@ -26,6 +27,8 @@
   let deepThinking   = $state(false)
   /** @type {{ totalMs: number, ttftMs: number } | null} */
   let timing         = $state(null)
+
+  let formattedResponse = $derived(renderAiMarkdown(response))
 
   const DEEP_THINKING_MS = 2_500
   /** @type {ReturnType<typeof setTimeout> | null} */
@@ -234,7 +237,9 @@
         <p class="error-msg">{error}</p>
 
       {:else if response}
-        <p class="response-text">{response}{#if isStreaming}<span class="cursor">▌</span>{/if}</p>
+        <div class="response-text">
+          {@html formattedResponse}{#if isStreaming}<span class="cursor">▌</span>{/if}
+        </div>
         {#if timing && isDone}
           <p class="response-timing" aria-live="polite">
             {formatAiTiming(timing.totalMs)}
@@ -404,8 +409,83 @@
     font-size: 13px;
     line-height: 1.75;
     color: var(--text);
-    white-space: pre-wrap;
     word-break: break-word;
+  }
+
+  .response-text :global(p) {
+    margin: 0 0 0.75em;
+  }
+
+  .response-text :global(p:last-child) {
+    margin-bottom: 0;
+  }
+
+  .response-text :global(strong) {
+    font-weight: 600;
+  }
+
+  .response-text :global(em) {
+    font-style: italic;
+  }
+
+  .response-text :global(h1),
+  .response-text :global(h2),
+  .response-text :global(h3),
+  .response-text :global(h4) {
+    font-family: var(--font-prose);
+    font-weight: 600;
+    line-height: 1.35;
+    margin: 1em 0 0.4em;
+  }
+
+  .response-text :global(h1) { font-size: 1.15em; }
+  .response-text :global(h2) { font-size: 1.08em; }
+  .response-text :global(h3),
+  .response-text :global(h4) { font-size: 1em; }
+
+  .response-text :global(ul),
+  .response-text :global(ol) {
+    margin: 0 0 0.75em;
+    padding-left: 1.25em;
+  }
+
+  .response-text :global(li) {
+    margin: 0.25em 0;
+  }
+
+  .response-text :global(code) {
+    font-family: var(--crepe-font-code);
+    font-size: 0.92em;
+    background: color-mix(in srgb, var(--text) 8%, transparent);
+    padding: 0.1em 0.35em;
+    border-radius: 3px;
+  }
+
+  .response-text :global(pre) {
+    margin: 0 0 0.75em;
+    padding: 10px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    overflow-x: auto;
+  }
+
+  .response-text :global(pre code) {
+    background: none;
+    padding: 0;
+  }
+
+  .response-text :global(a) {
+    color: var(--accent);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .response-text :global(blockquote) {
+    margin: 0 0 0.75em;
+    padding-left: 0.75em;
+    border-left: 2px solid var(--border);
+    color: var(--text-dim);
   }
 
   .cursor {

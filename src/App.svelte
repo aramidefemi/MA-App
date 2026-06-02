@@ -2,9 +2,12 @@
   import { ListTree } from '@lucide/svelte'
   import { onMount } from 'svelte'
   import { getCurrentWindow } from '@tauri-apps/api/window'
+  import { isTauri } from './lib/tauriEnv.js'
   import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
   import { exportDocx, exportPdf, printDocument } from './lib/export.js'
-  import { setupAppMenu } from './lib/appMenu.js'
+  import { setupAppMenu, refreshRecentMenu, syncMenuItemState } from './lib/appMenu.js'
+  import { revealItemInDir } from '@tauri-apps/plugin-opener'
+  import { exists } from '@tauri-apps/plugin-fs'
   import { getEditorCommands } from './lib/editor/editorCommands.js'
   import Editor from './lib/components/Editor.svelte'
   import DocumentPreview from './lib/components/DocumentPreview.svelte'
@@ -12,15 +15,21 @@
   import SidebarFileToolbar from './lib/components/SidebarFileToolbar.svelte'
   import { displayFileName } from './lib/fileDisplay.js'
   import { save } from '@tauri-apps/plugin-dialog'
-  import { writeTextFile } from '@tauri-apps/plugin-fs'
+  import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
   import { dirname } from '@tauri-apps/api/path'
   import {
     createFolderInWorkspace,
     createMarkdownInFolder,
+    duplicateFilePath,
     formatAiNoteContent,
+    moveEntryToFolder,
+    renameEntry,
     saveAiNoteInFolder,
     slugifyNoteName,
   } from './lib/workspaceFiles.js'
+  import { copyText } from './lib/clipboard.js'
+  import { confirmAction } from './lib/nativeDialog.js'
+  import { hasTrashedItems, restoreFromTrash, trashEntry } from './lib/workspaceTrash.js'
   import OutlinePanel from './lib/components/OutlinePanel.svelte'
   import WelcomeScreen from './lib/components/WelcomeScreen.svelte'
   import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
@@ -36,75 +45,80 @@
   import { session, persistSession } from './lib/modules/session'
   import { createAutosave } from './lib/autosave.js'
   import { document, isUntitled } from './lib/modules/document'
+  import { aiDrift } from './lib/modules/aiDrift'
   import { wordGoal } from './lib/modules/wordGoal'
   import WordGoalBar from './lib/components/WordGoalBar.svelte'
   import EditorTopbar from './lib/components/EditorTopbar.svelte'
-  // import { addRecentProject, loadRecentProjects, projectName } from './lib/recentProjects.js'
+  import FindBar from './lib/components/FindBar.svelte'
+  import { addRecentProject, loadRecentProjects, projectName } from './lib/recentProjects.js'
 
   // ─── State ────────────────────────────────────────────────────
-  let filePath     = $state(null)
-  let isPreview    = $state(false)
-  let content      = $state('')
-  let savedContent = $state('')
-  let saveStatus   = $state('idle') // 'idle' | 'saving' | 'saved' | 'error'
-  let showOutline  = $state(false)
-  let folderPath   = $state(null)
-  let showSidebar  = $state(false)
-  let showSettings = $state(false)
-  let topbarDismissed = $state(false)
-  let topbarHovered   = $state(false)
-  let skipTopbarHide  = $state(true)
-  let showResearch    = $state(false)
-  let researchSessionId = $state(0)
-  // let recentProjects  = $state([])
-  let homePath        = $state('')
-  let fileTree        = $state(null)
+  let recentProjects = $state([])
+  let showFind = $state(false)
+  let fileTree = $state(null)
+  let fileTreeSearch = $state('')
+  let canUndoTrash = $state(false)
+  let driftContentVersion = $state(0)
 
-  $effect(() => {
-    topbarDismissed = ui.topbarDismissed
-    topbarHovered = ui.topbarHovered
-    skipTopbarHide = ui.skipTopbarHide
-    homePath = ui.homePath
-  })
-
-  $effect(() => {
-    showResearch = research.showResearch
-    researchSessionId = research.sessionId
-  })
-
-  $effect(() => {
-    aiLog('App research state changed', {
-      showResearch,
-      researchSessionId,
-      researchInputLen: research.researchInput.length,
-      researchInputPreview: research.researchInput.slice(0, 80),
-      filePath,
-      showWelcome,
-    })
-  })
-  let showWelcome = $derived(!filePath && !folderPath)
-  let topbarVisible = $derived(!topbarDismissed || topbarHovered)
-  let isDirty  = $derived(content !== savedContent)
-  let hasSidebar = $derived(!!folderPath && showSidebar)
-  let fileName = $derived(
-    filePath
-      ? displayFileName(filePath.split('/').pop().split('\\').pop())
-      : null
+  let showWelcome = $derived(!document.filePath && !workspace.folderPath)
+  let topbarVisible = $derived(ui.topbarVisible)
+  let hasSidebar = $derived(
+    !!workspace.folderPath && workspace.showSidebar && ui.sidebarChromeVisible,
   )
-
-  $effect(() => {
-    filePath = document.filePath
-    isPreview = document.isPreview
-    content = document.content
-    savedContent = document.savedContent
-    saveStatus = document.saveStatus
+  let fileName = $derived(
+    document.fileName ? displayFileName(document.fileName) : null,
+  )
+  let folderName = $derived(
+    workspace.folderPath
+      ? workspace.folderPath.split('/').pop()?.split('\\').pop() ?? null
+      : null,
+  )
+  let driftLastManualCheck = $derived(aiDrift.lastManualCheck)
+  let driftIsRunning = $derived(aiDrift.isRunning)
+  let driftLastError = $derived(aiDrift.lastError)
+  let driftMatchesCurrentFile = $derived(
+    driftLastManualCheck?.filePath === document.filePath,
+  )
+  let driftDraftCount = $derived(
+    driftMatchesCurrentFile
+      ? (driftLastManualCheck?.result?.metadata?.issueCount ?? null)
+      : null,
+  )
+  let driftIsPartial = $derived(
+    driftMatchesCurrentFile && !!driftLastManualCheck?.result?.metadata?.partial,
+  )
+  let driftIsStale = $derived(
+    driftMatchesCurrentFile && !!driftLastManualCheck?.stale,
+  )
+  let driftStatus = $derived.by(() => {
+    if (driftIsRunning) return 'checking'
+    if (driftLastError && driftMatchesCurrentFile) return 'error'
+    if (!driftLastManualCheck || !driftMatchesCurrentFile) return 'idle'
+    return 'done'
+  })
+  let driftStatusText = $derived.by(() => {
+    if (driftStatus === 'checking') return 'Checking AI Draft...'
+    if (driftStatus === 'error') return 'Error'
+    if (driftStatus === 'done') {
+      const count = driftDraftCount ?? 0
+      const partialSuffix = driftIsPartial ? ' (partial)' : ''
+      return `${count} drifty passage${count === 1 ? '' : 's'}${partialSuffix}`
+    }
+    return ''
   })
 
+  let lastDriftFilePath = $state(null)
   $effect(() => {
-    folderPath = workspace.folderPath
-    showSidebar = workspace.showSidebar
-    showOutline = workspace.showOutline
-    showSettings = workspace.showSettings
+    const path = document.filePath
+    const isPreview = document.isPreview
+    const isFirstRun = lastDriftFilePath === null
+    const pathChanged = !isFirstRun && path !== lastDriftFilePath
+
+    if (isFirstRun || pathChanged) {
+      lastDriftFilePath = path
+      if (!isFirstRun) driftContentVersion += 1
+      if (path && !isPreview) runAiDriftCheck()
+    }
   })
 
   $effect(() => {
@@ -117,6 +131,19 @@
     session.typewriterScroll
     session.focusMode
     persistSession()
+  })
+
+  $effect(() => {
+    void syncMenuItemState({
+      canReveal: !!(revealTargetPath()),
+      canDuplicate: !!(
+        document.filePath &&
+        !isUntitled(document.filePath) &&
+        !document.isPreview
+      ),
+      canNewFileInFolder: !!workspace.folderPath,
+      canCloseFolder: !!workspace.folderPath,
+    })
   })
 
   let lastPersistedFilePath = $state(undefined)
@@ -135,55 +162,116 @@
   })
 
   onMount(() => {
-    if (getCurrentWindow().label !== 'main') return
+    if (!isTauri() || getCurrentWindow().label !== 'main') return
     return initUsageTracking()
   })
 
   const autosave = createAutosave(() => {
-    if (!filePath || isUntitled(filePath) || !isDirty || isPreview) return
+    if (
+      !document.filePath ||
+      isUntitled(document.filePath) ||
+      !document.isDirty ||
+      document.isPreview
+    ) {
+      return
+    }
     void document.saveFile()
   })
 
   $effect(() => {
-    filePath
+    document.filePath
     autosave.cancel()
   })
 
   onMount(() => {
-    setupAppMenu({
-      newFile,
-      newWindow,
-      openFile,
-      saveFile,
-      saveAs,
-      exportDocx: () => exportDocx(content, fileName),
-      exportPdf: () => exportPdf(content, fileName),
-      print: () => printDocument(fileName ?? 'Document'),
-      closeTab,
-      closeAll,
-      undo: () => getEditorCommands()?.undo(),
-      redo: () => getEditorCommands()?.redo(),
-    })
+    void (async () => {
+      recentProjects = await loadRecentProjects()
+      await refreshRecentMenu(recentProjects)
+      await setupAppMenu({
+        newFile,
+        newWindow,
+        openFile,
+        openFolder,
+        openRecent,
+        revealInFileManager,
+        duplicateFile,
+        newFileInFolder: createWorkspaceFile,
+        closeFolder,
+        saveFile,
+        saveAs,
+        exportDocx: () => exportDocx(document.content, fileName),
+        exportPdf: () => exportPdf(document.content, fileName),
+        print: () => printDocument(fileName ?? 'Document'),
+        closeTab,
+        closeAll,
+        toggleSidebar,
+        toggleOutline: () => workspace.toggleOutline(),
+        toggleFocusMode: () => {
+          session.toggleFocusMode()
+          persistSession()
+        },
+        toggleTypewriterScroll: () => {
+          session.toggleTypewriterScroll()
+          persistSession()
+        },
+        toggleTheme: () => settings.toggleTheme(),
+        toggleSettings: () => {
+          if (workspace.showSettings) workspace.closeSettings()
+          else workspace.openSettings()
+        },
+        openFind: () => {
+          showFind = true
+        },
+        undo: () => getEditorCommands()?.undo(),
+        redo: () => getEditorCommands()?.redo(),
+      })
+    })()
   })
 
-  // async function rememberProject(type, path) {
-  //   recentProjects = await addRecentProject({
-  //     type,
-  //     path,
-  //     name: projectName(path),
-  //   })
-  // }
+  async function rememberProject(type, path) {
+    recentProjects = await addRecentProject({
+      type,
+      path,
+      name: projectName(path),
+    })
+    await refreshRecentMenu(recentProjects)
+  }
+
+  function revealTargetPath() {
+    if (document.filePath && !isUntitled(document.filePath)) return document.filePath
+    return workspace.folderPath
+  }
+
+  async function revealInFileManager() {
+    const path = revealTargetPath()
+    if (!path) return
+    await revealItemInDir(path)
+  }
+
+  async function duplicateFile() {
+    await document.duplicateFile()
+    const path = document.filePath
+    if (path && !isUntitled(path)) await rememberProject('file', path)
+    fileTree?.refresh()
+  }
+
+  function closeFolder() {
+    workspace.closeFolder()
+    ui.resetSidebar()
+  }
 
   async function loadFileAt(path) {
     await document.loadFileAt(path)
     workspace.closeSettings()
     resetTopbar()
-    // await rememberProject('file', path)
+    await rememberProject('file', path)
   }
 
   async function loadFolderAt(path) {
     await workspace.loadFolderAt(path)
-    // await rememberProject('folder', path)
+    ui.resetSidebar()
+    await rememberProject('folder', path)
+    await refreshTrashState()
   }
 
   // ─── File ops ─────────────────────────────────────────────────
@@ -191,19 +279,27 @@
     await document.openFile()
     workspace.closeSettings()
     resetTopbar()
+    const path = document.filePath
+    if (path && !isUntitled(path)) await rememberProject('file', path)
   }
 
   async function openFolder() {
     await workspace.openFolder()
+    if (workspace.folderPath) {
+      ui.resetSidebar()
+      await rememberProject('folder', workspace.folderPath)
+      await refreshTrashState()
+    }
   }
 
-  // async function openRecent(project) {
-  //   if (project.type === 'folder') {
-  //     await loadFolderAt(project.path)
-  //     return
-  //   }
-  //   await loadFileAt(project.path)
-  // }
+  async function openRecent(project) {
+    if (!(await exists(project.path))) return
+    if (project.type === 'folder') {
+      await loadFolderAt(project.path)
+      return
+    }
+    await loadFileAt(project.path)
+  }
 
   async function openFileFromTree(path) {
     await document.openFileFromTree(path)
@@ -256,7 +352,7 @@
   }
 
   async function closeAll() {
-    if (isDirty) await saveFile()
+    if (document.isDirty) await saveFile()
     await getCurrentWindow().close()
   }
 
@@ -303,7 +399,7 @@
       (e.metaKey || e.ctrlKey) &&
       e.shiftKey &&
       e.key.toLowerCase() === 'b' &&
-      folderPath &&
+      workspace.folderPath &&
       !inEditor
     ) {
       e.preventDefault()
@@ -329,35 +425,73 @@
     }
     if (mod && e.key === ',') {
       e.preventDefault()
-      if (showSettings) workspace.closeSettings()
+      if (workspace.showSettings) workspace.closeSettings()
       else workspace.openSettings()
+    }
+    if (mod && e.key === 'f' && !e.shiftKey) {
+      e.preventDefault()
+      if (document.filePath && !document.isPreview) showFind = true
     }
     if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
       e.preventDefault()
       // ⌘E — explain selected text (Agent 3b wires the actual call)
     }
     if (e.key === 'Escape') {
-      if (showSettings) workspace.closeSettings()
-      else if (showOutline) workspace.closeOutline()
+      if (showFind) showFind = false
+      else if (workspace.showSettings) workspace.closeSettings()
+      else if (workspace.showOutline) workspace.closeOutline()
     }
   }
 
   function toggleSidebar() {
     workspace.toggleSidebar()
+    if (workspace.showSidebar) ui.resetSidebar()
   }
 
   async function createWorkspaceFile() {
+    await createFileInFolder(workspace.folderPath)
+  }
+
+  async function createWorkspaceFolder() {
+    await createFolderIn(workspace.folderPath)
+  }
+
+  async function refreshTrashState() {
+    const root = workspace.folderPath
+    canUndoTrash = root ? await hasTrashedItems(root) : false
+  }
+
+  function refreshFileTree() {
+    fileTree?.refresh()
+    void refreshTrashState()
+  }
+
+  function collapseFileTree() {
+    fileTree?.collapseAll()
+  }
+
+  /** @param {string} newName @param {string} diskName */
+  function resolveRenameName(newName, diskName, isDir) {
+    if (isDir) return newName.trim()
+    const trimmed = newName.trim()
+    if (!trimmed) return trimmed
+    if (trimmed.includes('.')) return trimmed
+    const dot = diskName.lastIndexOf('.')
+    return dot > 0 ? `${trimmed}${diskName.slice(dot)}` : `${trimmed}.md`
+  }
+
+  async function createFileInFolder(folderPath) {
     if (!folderPath) return
     try {
       const path = await createMarkdownInFolder(folderPath)
       fileTree?.refresh()
       await openFileFromTree(path)
     } catch (e) {
-      console.error('New file failed:', e)
+      console.error('New file in folder failed:', e)
     }
   }
 
-  async function createWorkspaceFolder() {
+  async function createFolderIn(folderPath) {
     if (!folderPath) return
     try {
       await createFolderInWorkspace(folderPath)
@@ -367,12 +501,129 @@
     }
   }
 
-  function refreshFileTree() {
-    fileTree?.refresh()
+  /** @param {string} fromPath @param {string} toFolderPath */
+  async function handleTreeMove(fromPath, toFolderPath) {
+    const root = workspace.folderPath
+    if (!root) return
+    try {
+      const newPath = await moveEntryToFolder(fromPath, toFolderPath, root)
+      document.retargetFilePath(fromPath, newPath)
+      fileTree?.refresh()
+    } catch (e) {
+      console.error('Move failed:', e)
+    }
   }
 
-  function collapseFileTree() {
-    fileTree?.collapseAll()
+  /**
+   * @param {string} path
+   * @param {string} newName
+   * @param {{ path: string, name: string, isDir: boolean }} entry
+   */
+  async function handleTreeRename(path, newName, entry) {
+    const root = workspace.folderPath
+    if (!root) return
+    const finalName = resolveRenameName(newName, entry.name, entry.isDir)
+    try {
+      const newPath = await renameEntry(path, finalName, root, { isDir: entry.isDir })
+      document.retargetFilePath(path, newPath)
+      fileTree?.refresh()
+    } catch (e) {
+      console.error('Rename failed:', e)
+    }
+  }
+
+  /**
+   * @param {Array<{ path: string, name: string, isDir: boolean }>} targets
+   */
+  async function handleTreeDelete(targets) {
+    const root = workspace.folderPath
+    if (!root || !targets.length) return
+
+    const label =
+      targets.length === 1
+        ? targets[0].isDir
+          ? `folder “${targets[0].name}”`
+          : `“${displayFileName(targets[0].name)}”`
+        : `${targets.length} items`
+
+    if (
+      !(await confirmAction(`Move ${label} to Trash? You can undo from the sidebar menu.`, {
+        title: 'Move to Trash',
+      }))
+    ) {
+      return
+    }
+
+    try {
+      for (const entry of targets) {
+        await trashEntry(entry.path, root, { isDir: entry.isDir })
+        document.clearIfRemoved(entry.path)
+      }
+      fileTree?.refresh()
+      await refreshTrashState()
+    } catch (e) {
+      console.error('Delete failed:', e)
+    }
+  }
+
+  /** @param {string[]} paths */
+  async function handleTreeCopyPath(paths) {
+    try {
+      await copyText(paths.join('\n'))
+    } catch (e) {
+      console.error('Copy path failed:', e)
+    }
+  }
+
+  /** @param {string} path */
+  async function handleTreeCopyFile(path) {
+    try {
+      const text = await readTextFile(path)
+      await copyText(text)
+    } catch (e) {
+      console.error('Copy file failed:', e)
+    }
+  }
+
+  async function handleUndoDelete() {
+    const root = workspace.folderPath
+    if (!root) return
+    try {
+      const { restoredPath, isDir } = await restoreFromTrash(root)
+      fileTree?.refresh()
+      await refreshTrashState()
+      if (!isDir) await openFileFromTree(restoredPath)
+    } catch (e) {
+      console.error('Undo delete failed:', e)
+    }
+  }
+
+  /** @param {string} path */
+  async function handleTreeDuplicate(path) {
+    try {
+      const newPath = await duplicateFilePath(path)
+      const text = await readTextFile(path)
+      await writeTextFile(newPath, text)
+      fileTree?.refresh()
+      await openFileFromTree(newPath)
+    } catch (e) {
+      console.error('Duplicate failed:', e)
+    }
+  }
+
+  /** @param {string} path */
+  async function handleTreeReveal(path) {
+    await revealItemInDir(path)
+  }
+
+  function runAiDriftCheck() {
+    if (!document.filePath || document.isPreview) return
+    void aiDrift.runAiDriftManualCheck({
+      filePath: document.filePath,
+      content: document.content,
+      contentVersion: driftContentVersion,
+      getLatestContentVersion: () => driftContentVersion,
+    })
   }
 
   // ─── Topbar distraction-free mode ─────────────────────────────
@@ -385,8 +636,10 @@
   }
 
   async function resolveNoteDir() {
-    if (folderPath) return folderPath
-    if (filePath && !isUntitled(filePath)) return dirname(filePath)
+    if (workspace.folderPath) return workspace.folderPath
+    if (document.filePath && !isUntitled(document.filePath)) {
+      return dirname(document.filePath)
+    }
     return null
   }
 
@@ -395,7 +648,7 @@
       const dir = await resolveNoteDir()
       if (dir) {
         const path = await saveAiNoteInFolder(dir, context, response)
-        if (folderPath) fileTree?.refresh()
+        if (workspace.folderPath) fileTree?.refresh()
         aiLog('handleSaveNote saved', { path })
         return
       }
@@ -413,7 +666,9 @@
 
   // ─── Content sync from editor ─────────────────────────────────
   function handleContentChange(_markdown) {
+    driftContentVersion += 1
     ui.handleTopbarOnEdit()
+    ui.handleSidebarOnEdit()
     autosave.schedule()
   }
 </script>
@@ -427,9 +682,12 @@
     <div class="titlebar-drag" data-tauri-drag-region></div>
     <div class="empty">
       <WelcomeScreen
+        {recentProjects}
         onStartWriting={startWriting}
         onOpenFile={openFile}
         onOpenFolder={openFolder}
+        onOpenRecent={openRecent}
+        formatPath={ui.formatDisplayPath}
       />
     </div>
 
@@ -437,28 +695,66 @@
   {:else}
     <div class="editor-shell">
       <div class="workspace">
-        {#if hasSidebar}
-          <aside class="sidebar">
-            <div class="sidebar-titlebar" data-tauri-drag-region>
-              <SidebarToggle
-                onclick={toggleSidebar}
-                title="Hide sidebar (⌘⇧B)"
+        {#if workspace.folderPath && workspace.showSidebar}
+          <div
+            class="sidebar-shell"
+            class:expanded={ui.sidebarChromeVisible}
+          >
+            <div
+              class="sidebar-hover-zone"
+              class:active={!ui.sidebarChromeVisible}
+              role="presentation"
+              onmouseenter={() => (ui.sidebarHovered = true)}
+              onmouseleave={() => (ui.sidebarHovered = false)}
+            ></div>
+            <aside
+              class="sidebar"
+              onmouseenter={() => (ui.sidebarHovered = true)}
+              onmouseleave={() => (ui.sidebarHovered = false)}
+            >
+              <div class="sidebar-titlebar" data-tauri-drag-region>
+                <SidebarToggle
+                  onclick={toggleSidebar}
+                  title="Hide sidebar (⌘⇧B)"
+                />
+                <span class="workspace-name" title={workspace.folderPath}>
+                  {ui.formatDisplayPath(workspace.folderPath)}
+                </span>
+              </div>
+              <SidebarFileToolbar
+                onNewFile={createWorkspaceFile}
+                onNewFolder={createWorkspaceFolder}
+                onRefresh={refreshFileTree}
+                onCollapse={collapseFileTree}
+                onAiDrift={runAiDriftCheck}
+                aiDriftStatus={driftStatus}
+                aiDriftStatusText={driftStatusText}
+                aiDriftDraftCount={driftDraftCount}
+                aiDriftIsStale={driftIsStale}
+                aiDriftIsRunning={driftIsRunning}
+                bind:searchQuery={fileTreeSearch}
               />
-            </div>
-            <SidebarFileToolbar
-              onNewFile={createWorkspaceFile}
-              onNewFolder={createWorkspaceFolder}
-              onRefresh={refreshFileTree}
-              onCollapse={collapseFileTree}
-            />
-            <FileTree
-              bind:this={fileTree}
-              rootPath={folderPath}
-              activeFile={filePath}
-              onSelect={openFileFromTree}
-            />
-            <DocumentMetaBar />
-          </aside>
+              <FileTree
+                bind:this={fileTree}
+                rootPath={workspace.folderPath}
+                activeFile={document.filePath}
+                filterQuery={fileTreeSearch}
+                canUndoDelete={canUndoTrash}
+                onSelect={openFileFromTree}
+                onMove={handleTreeMove}
+                onRename={handleTreeRename}
+                onDelete={handleTreeDelete}
+                onDuplicate={handleTreeDuplicate}
+                onReveal={handleTreeReveal}
+                onNewFileIn={createFileInFolder}
+                onNewFolderIn={createFolderIn}
+                onCopyPath={handleTreeCopyPath}
+                onCopyFile={handleTreeCopyFile}
+                onUndoDelete={handleUndoDelete}
+              />
+              <DocumentMetaBar />
+            </aside>
+          </div>
         {/if}
 
         <div class="content-column">
@@ -474,15 +770,16 @@
 
             <EditorTopbar
               fileName={fileName}
-              isDirty={isDirty}
+              folderName={folderName}
+              isDirty={document.isDirty}
               topbarVisible={topbarVisible}
               hasSidebar={hasSidebar}
-              saveStatus={saveStatus}
+              saveStatus={document.saveStatus}
               onOpenSettings={() => workspace.openSettings()}
             />
           </div>
 
-          {#if folderPath && !hasSidebar}
+          {#if workspace.folderPath && !workspace.showSidebar}
             <div class="sidebar-toggle-float">
               <SidebarToggle
                 variant="float"
@@ -493,10 +790,14 @@
           {/if}
  
           <div class="editor-wrap">
-            {#if filePath}
-              {#key filePath}
-                {#if isPreview}
-                  <DocumentPreview path={filePath} />
+            <FindBar
+              open={showFind && !!document.filePath && !document.isPreview}
+              onClose={() => (showFind = false)}
+            />
+            {#if document.filePath}
+              {#key document.filePath}
+                {#if document.isPreview}
+                  <DocumentPreview path={document.filePath} />
                 {:else}
                   <Editor
                     onContentChange={handleContentChange}
@@ -507,27 +808,27 @@
             {:else}
               <div class="folder-prompt">
                 <p>Select a file from the sidebar</p>
-                <span class="folder-prompt-path">{ui.formatDisplayPath(folderPath)}</span>
+                <span class="folder-prompt-path">{ui.formatDisplayPath(workspace.folderPath)}</span>
               </div>
             {/if}
           </div>
         </div>
 
-        {#if showResearch}
-          {#key researchSessionId}
+        {#if research.showResearch}
+          {#key research.sessionId}
             <ResearchPanel onSaveNote={handleSaveNote} />
           {/key}
         {/if}
       </div>
 
     <!-- outline panel -->
-    {#if showOutline}
+    {#if workspace.showOutline}
       <OutlinePanel />
     {/if}
     </div>
   {/if}
 
-  {#if showSettings}
+  {#if workspace.showSettings}
     <SettingsPanel onClose={() => workspace.closeSettings()} />
   {/if}
 
@@ -628,20 +929,64 @@
     overflow: hidden;
   }
 
+  .sidebar-shell {
+    width: 0;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 20;
+    height: 100%;
+    overflow: visible;
+    transition: width 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-shell.expanded {
+    width: 200px;
+    overflow: visible;
+  }
+
+  .sidebar-hover-zone {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 12px;
+    z-index: 2;
+  }
+
+  .sidebar-hover-zone.active {
+    display: block;
+  }
+
   .sidebar {
     width: 200px;
-    flex-shrink: 0;
+    height: 100%;
     display: flex;
     flex-direction: column;
     background: var(--surface);
     border-right: 1px solid var(--border);
-    overflow: hidden;
+    overflow: visible;
+    position: absolute;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+  }
+
+  .sidebar-shell.expanded .sidebar {
+    position: relative;
+    transform: translateX(0);
+    pointer-events: auto;
   }
 
   .sidebar-titlebar {
     position: relative;
+    display: flex;
+    align-items: center;
     height: 38px;
     flex-shrink: 0;
+    padding-right: 8px;
     -webkit-app-region: drag;
   }
 
@@ -650,6 +995,20 @@
     left: 78px;
     top: 50%;
     transform: translateY(-50%);
+  }
+
+  .workspace-name {
+    margin-left: 106px;
+    min-width: 0;
+    flex: 1;
+    font-family: var(--font-ui);
+    font-size: 12px;
+    color: var(--text-dim);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    letter-spacing: 0.01em;
   }
 
   .sidebar-toggle-float {

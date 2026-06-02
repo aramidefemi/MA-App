@@ -1,13 +1,42 @@
-import { exists, mkdir, writeTextFile } from '@tauri-apps/plugin-fs'
+import { dirname, basename, join } from '@tauri-apps/api/path'
+import { exists, mkdir, writeTextFile, rename, remove, stat } from '@tauri-apps/plugin-fs'
+import { isWriterSourceFile } from './workspaceFileTypes.js'
 
-function joinPath(parent, name) {
+/** @param {string} p */
+export function normalizePath(p) {
+  const normalized = p.replace(/\\/g, '/').replace(/\/+/g, '/')
+  return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized
+}
+
+/** @param {string} rootPath @param {string} targetPath */
+export function isPathInsideRoot(rootPath, targetPath) {
+  const root = normalizePath(rootPath)
+  const target = normalizePath(targetPath)
+  return target === root || target.startsWith(`${root}/`)
+}
+
+/** @param {string} ancestor @param {string} descendant */
+function isPathEqualOrDescendant(ancestor, descendant) {
+  const a = normalizePath(ancestor)
+  const d = normalizePath(descendant)
+  return d === a || d.startsWith(`${a}/`)
+}
+
+/** @param {string} rootPath @param {string} targetPath @param {string} [label] */
+function assertInsideRoot(rootPath, targetPath, label = 'Path') {
+  if (!isPathInsideRoot(rootPath, targetPath)) {
+    throw new Error(`${label} is outside workspace`)
+  }
+}
+
+export function joinPath(parent, name) {
   const separator = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
   return parent.endsWith('/') || parent.endsWith('\\')
     ? `${parent}${name}`
     : `${parent}${separator}${name}`
 }
 
-async function uniquePath(folderPath, baseName, isDir = false) {
+export async function uniquePath(folderPath, baseName, isDir = false) {
   let candidate = joinPath(folderPath, baseName)
   if (!(await exists(candidate))) return candidate
 
@@ -22,6 +51,15 @@ async function uniquePath(folderPath, baseName, isDir = false) {
   }
 
   return joinPath(folderPath, `${stem}-${Date.now()}${ext}`)
+}
+
+/** @param {string} sourcePath */
+export async function duplicateFilePath(sourcePath) {
+  const dir = await dirname(sourcePath)
+  const name = await basename(sourcePath)
+  const dot = name.lastIndexOf('.')
+  const copyName = dot > 0 ? `${name.slice(0, dot)}-copy${name.slice(dot)}` : `${name}-copy`
+  return uniquePath(dir, copyName)
 }
 
 /** @param {string} folderPath */
@@ -63,4 +101,51 @@ export async function saveAiNoteInFolder(folderPath, context, response) {
   const path = await uniquePath(folderPath, `${slugifyNoteName(context)}.md`)
   await writeTextFile(path, formatAiNoteContent(context, response))
   return path
+}
+
+/** @param {string} fromPath @param {string} destFolderPath @param {string} rootPath */
+export async function moveEntryToFolder(fromPath, destFolderPath, rootPath) {
+  assertInsideRoot(rootPath, fromPath, 'Source')
+  assertInsideRoot(rootPath, destFolderPath, 'Destination')
+
+  const { isDirectory: isDir } = await stat(fromPath)
+  if (isDir && isPathEqualOrDescendant(fromPath, destFolderPath)) {
+    throw new Error('Cannot move a folder into itself or a descendant')
+  }
+
+  const name = await basename(fromPath)
+  let destPath = await join(destFolderPath, name)
+  if (await exists(destPath)) destPath = await uniquePath(destFolderPath, name, isDir)
+
+  await rename(fromPath, destPath)
+  return destPath
+}
+
+/**
+ * @param {string} entryPath
+ * @param {string} newName
+ * @param {string} rootPath
+ * @param {{ isDir: boolean }} options
+ */
+export async function renameEntry(entryPath, newName, rootPath, { isDir }) {
+  assertInsideRoot(rootPath, entryPath)
+
+  const trimmed = newName.trim()
+  if (!trimmed || /[/\\]/.test(trimmed)) throw new Error('Invalid name')
+  if (!isDir && !isWriterSourceFile(trimmed)) throw new Error('Unsupported file extension')
+
+  const parent = await dirname(entryPath)
+  const newPath = await join(parent, trimmed)
+  await rename(entryPath, newPath)
+  return newPath
+}
+
+/**
+ * @param {string} entryPath
+ * @param {string} rootPath
+ * @param {{ isDir: boolean }} options
+ */
+export async function deleteEntry(entryPath, rootPath, { isDir }) {
+  assertInsideRoot(rootPath, entryPath)
+  await remove(entryPath, { recursive: isDir })
 }

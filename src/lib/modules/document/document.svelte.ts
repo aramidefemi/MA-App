@@ -1,6 +1,7 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { app } from '../../app.js'
+import { duplicateFilePath } from '../../workspaceFiles.js'
 import { isEditableInEditor, isPreviewFile } from '../../workspaceFileTypes.js'
 
 export const UNTITLED_PATH = 'untitled.md'
@@ -101,6 +102,18 @@ async function closeTab() {
   previewMode = false
 }
 
+function retargetFilePath(oldPath: string, newPath: string) {
+  if (filePath === oldPath) filePath = newPath
+}
+
+function clearIfRemoved(path: string) {
+  if (filePath !== path) return
+  filePath = null
+  content = ''
+  savedContent = ''
+  previewMode = false
+}
+
 function setContent(markdown: string) {
   content = markdown
 }
@@ -117,8 +130,19 @@ async function openFile() {
 async function openFileFromTree(path: string) {
   if (isDirty) await saveFile()
   const name = path.split(/[/\\]/).pop() ?? path
-  if (isPreviewFile(name)) await openPreviewAt(path)
-  else if (isEditableInEditor(name)) await loadFileAt(path)
+  try {
+    if (isPreviewFile(name)) await openPreviewAt(path)
+    else if (isEditableInEditor(name)) await loadFileAt(path)
+  } catch (error) {
+    console.error('Failed to open file:', path, error)
+  }
+}
+
+async function duplicateFile() {
+  if (previewMode || !filePath || isUntitled(filePath)) return
+  const path = await duplicateFilePath(filePath)
+  await writeTextFile(path, content)
+  await loadFileAt(path)
 }
 
 export const document = {
@@ -136,7 +160,10 @@ export const document = {
   startWriting,
   newFile,
   closeTab,
+  retargetFilePath,
+  clearIfRemoved,
   setContent,
   openFile,
   openFileFromTree,
+  duplicateFile,
 }

@@ -1,6 +1,7 @@
 import { editorViewCtx } from '@milkdown/core'
 import { getCurrentWebview } from '@tauri-apps/api/webview'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import { isTauri } from '../tauriEnv.js'
 import {
   canAttachImages,
   isImagePath,
@@ -30,6 +31,8 @@ function dropPosInEditor(view, x, y) {
  * @returns {() => void}
  */
 export function setupTauriImageDrop(options) {
+  if (!isTauri()) return () => {}
+
   const { getEditor, getDocumentPath, onSaveRequired } = options
 
   const ready = getCurrentWebview().onDragDropEvent(async (event) => {

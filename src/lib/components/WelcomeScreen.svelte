@@ -4,20 +4,20 @@
   import appIcon from '../../../app-icon.svg'
 
   /** @type {{
-    // recentProjects: import('../recentProjects.js').RecentProject[],
+    recentProjects?: import('../recentProjects.js').RecentProject[],
     onStartWriting: () => void,
     onOpenFile: () => void,
     onOpenFolder: () => void,
-    // onOpenRecent: (project: import('../recentProjects.js').RecentProject) => void,
-    // formatPath: (path: string) => string,
+    onOpenRecent?: (project: import('../recentProjects.js').RecentProject) => void,
+    formatPath?: (path: string) => string,
   }} */
   let {
-    // recentProjects = [],
+    recentProjects = [],
     onStartWriting,
     onOpenFile,
     onOpenFolder,
-    // onOpenRecent,
-    // formatPath,
+    onOpenRecent,
+    formatPath = (path) => path,
   } = $props()
 </script>
 
@@ -54,8 +54,7 @@
     </button>
   </div>
 
-  <!-- Recent projects (disabled)
-  {#if recentProjects.length > 0}
+  {#if recentProjects.length > 0 && onOpenRecent}
     <section class="recent">
       <div class="recent-header">
         <h2>Recent projects</h2>
@@ -76,7 +75,6 @@
       </ul>
     </section>
   {/if}
-  -->
 
   <div class="hints">
     <kbd>⌘N</kbd> start writing &nbsp;·&nbsp; <kbd>⌘O</kbd> open file &nbsp;·&nbsp; <kbd>⌘⇧O</kbd> open folder
@@ -166,7 +164,6 @@
     letter-spacing: var(--crepe-tracking-tight);
   }
 
-  /* Recent projects (disabled)
   .recent-header h2 {
     font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     font-size: 12px;
@@ -219,7 +216,6 @@
     min-width: 0;
     text-align: right;
   }
-  */
 
   .hints {
     font-size: var(--crepe-size-caption);

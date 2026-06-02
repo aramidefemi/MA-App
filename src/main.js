@@ -6,13 +6,33 @@ import App from './App.svelte'
 import { app } from './lib/app.js'
 import { initSession } from './lib/modules/session'
 import { initSettings } from './lib/modules/settings'
+import { isTauri } from './lib/tauriEnv.js'
 
 document.title = app.name
 
 async function bootstrap() {
-  const isMainWindow = getCurrentWindow().label === 'main'
-  await Promise.all([initSession(isMainWindow), initSettings(isMainWindow)])
-  mount(App, { target: document.getElementById('app') })
+  let isMainWindow = true
+  if (isTauri()) {
+    try {
+      isMainWindow = getCurrentWindow().label === 'main'
+    } catch (e) {
+      console.warn('[bootstrap] getCurrentWindow failed:', e)
+    }
+  }
+
+  const target = document.getElementById('app')
+  if (!target) {
+    console.error('[bootstrap] #app not found')
+    return
+  }
+
+  mount(App, { target })
+
+  try {
+    await Promise.all([initSession(isMainWindow), initSettings(isMainWindow)])
+  } catch (e) {
+    console.error('[bootstrap] init failed:', e)
+  }
 }
 
-void bootstrap()
+bootstrap().catch((e) => console.error('[bootstrap]', e))
