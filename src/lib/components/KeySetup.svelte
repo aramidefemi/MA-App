@@ -172,7 +172,7 @@
 
   .secondary:not(:disabled):hover {
     color: var(--text);
-    border-color: #333;
+    border-color: var(--border);
   }
 
   .link {

@@ -104,8 +104,8 @@
     max-width: 720px;
     margin: 0 auto;
     width: 100%;
-    font-family: Georgia, Cambria, 'Times New Roman', serif;
-    font-size: 12pt;
+    font-family: var(--crepe-font-default);
+    font-size: var(--crepe-size-body);
     line-height: 1.75;
     color: var(--text);
     user-select: text;
@@ -115,7 +115,8 @@
   .preview-html :global(h1),
   .preview-html :global(h2),
   .preview-html :global(h3) {
-    font-family: var(--font-ui);
+    font-family: var(--crepe-font-title);
+    font-weight: var(--crepe-weight-regular);
     margin: 1.2em 0 0.5em;
   }
 
@@ -124,8 +125,8 @@
     overflow: auto;
     margin: 0;
     padding: 24px 32px;
-    font-family: 'SF Mono', 'JetBrains Mono', monospace;
-    font-size: 12px;
+    font-family: var(--crepe-font-code);
+    font-size: var(--crepe-size-ui);
     line-height: 1.6;
     color: var(--text);
     white-space: pre-wrap;

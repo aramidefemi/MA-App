@@ -1,0 +1,94 @@
+/* Crepe design tokens — source of truth (dark default) */
+:root {
+  --crepe-color-background: #1f1b16;
+  --crepe-color-on-background: #eae1d9;
+  --crepe-color-surface: #18120b;
+  --crepe-color-surface-low: #201b13;
+  --crepe-color-on-surface: #ede0d4;
+  --crepe-color-on-surface-variant: #d3c4b4;
+  --crepe-color-outline: #9c8f80;
+  --crepe-color-primary: #f4bd6f;
+  --crepe-color-secondary: #56442a;
+  --crepe-color-on-secondary: #fbdebc;
+  --crepe-color-inverse: #ede0d4;
+  --crepe-color-on-inverse: #362f27;
+  --crepe-color-inline-code: #ffb4ab;
+  --crepe-color-error: #ffb4ab;
+  --crepe-color-hover: #251f17;
+  --crepe-color-selected: #3b342b;
+  --crepe-color-inline-area: #3f3830;
+
+  --crepe-font-title: Georgia, Cambria, 'Times New Roman', Times, serif;
+  --crepe-font-default: 'Open Sans', Arial, Helvetica, sans-serif;
+  --crepe-font-code: Fira Code, Menlo, Monaco, 'Courier New', Courier, monospace;
+
+  /* Typography scale (matches Crepe editor prose + UI chrome) */
+  --crepe-size-body: 16px;
+  --crepe-line-body: 24px;
+  --crepe-size-ui: 12px;
+  --crepe-line-ui: 16px;
+  --crepe-size-md: 13px;
+  --crepe-size-caption: 10px;
+  --crepe-size-label: 11px;
+  --crepe-weight-regular: 400;
+  --crepe-weight-medium: 500;
+  --crepe-weight-semibold: 600;
+  --crepe-weight-bold: 700;
+  --crepe-tracking-tight: 0.01em;
+  --crepe-tracking-normal: 0.02em;
+  --crepe-tracking-wide: 0.08em;
+
+  --crepe-shadow-1:
+    0px 1px 2px 0px rgba(255, 255, 255, 0.3),
+    0px 1px 3px 1px rgba(255, 255, 255, 0.15);
+  --crepe-shadow-2:
+    0px 1px 2px 0px rgba(255, 255, 255, 0.3),
+    0px 2px 6px 2px rgba(255, 255, 255, 0.15);
+}
+
+[data-theme='light'] {
+  --crepe-color-background: #fffdfb;
+  --crepe-color-on-background: #1f1b16;
+  --crepe-color-surface: #fff8f4;
+  --crepe-color-surface-low: #fff1e5;
+  --crepe-color-on-surface: #201b13;
+  --crepe-color-on-surface-variant: #4f4539;
+  --crepe-color-outline: #817567;
+  --crepe-color-primary: #805610;
+  --crepe-color-secondary: #fbdebc;
+  --crepe-color-on-secondary: #271904;
+  --crepe-color-inverse: #362f27;
+  --crepe-color-on-inverse: #fcefe2;
+  --crepe-color-inline-code: #ba1a1a;
+  --crepe-color-error: #ba1a1a;
+  --crepe-color-hover: #f9ecdf;
+  --crepe-color-selected: #ede0d4;
+  --crepe-color-inline-area: #e4d8cc;
+
+  --crepe-shadow-1:
+    0px 1px 3px 1px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+  --crepe-shadow-2:
+    0px 2px 6px 2px rgba(0, 0, 0, 0.15), 0px 1px 2px 0px rgba(0, 0, 0, 0.3);
+}
+
+/* Extend Crepe tokens into the app shell */
+:root,
+[data-theme='light'] {
+  --bg: var(--crepe-color-background);
+  --surface: var(--crepe-color-surface);
+  --border: color-mix(in srgb, var(--crepe-color-outline) 30%, var(--crepe-color-background));
+  --text: var(--crepe-color-on-background);
+  --text-dim: var(--crepe-color-outline);
+  --text-muted: var(--crepe-color-on-surface-variant);
+  --text-heading: var(--crepe-color-on-surface);
+  --accent: var(--crepe-color-primary);
+  --accent-dim: color-mix(in srgb, var(--crepe-color-primary) 18%, transparent);
+  --danger: var(--crepe-color-error);
+  --scrollbar: color-mix(in srgb, var(--crepe-color-outline) 45%, var(--crepe-color-background));
+  --font-ui: var(--crepe-font-default);
+  --font-prose: var(--crepe-font-default);
+  --font-title: var(--crepe-font-title);
+  --font-code: var(--crepe-font-code);
+  --max-w: 960px;
+  --radius: 4px;
+}

@@ -37,3 +37,30 @@ export async function createFolderInWorkspace(folderPath) {
   await mkdir(path, { recursive: true })
   return path
 }
+
+/** @param {string} text */
+export function slugifyNoteName(text) {
+  const slug = text
+    .trim()
+    .toLowerCase()
+    .replace(/['"]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+  return slug || 'note'
+}
+
+/** @param {string} context @param {string} response */
+export function formatAiNoteContent(context, response) {
+  const ctx = context.trim()
+  const body = response.trim()
+  if (!ctx) return `${body}\n`
+  return `## context\n\n${ctx}\n\n---\n\n${body}\n`
+}
+
+/** @param {string} folderPath @param {string} context @param {string} response */
+export async function saveAiNoteInFolder(folderPath, context, response) {
+  const path = await uniquePath(folderPath, `${slugifyNoteName(context)}.md`)
+  await writeTextFile(path, formatAiNoteContent(context, response))
+  return path
+}

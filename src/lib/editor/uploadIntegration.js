@@ -66,8 +66,10 @@ export function insertImagesAt(editor, images, pos) {
 
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx)
-    const { image } = view.state.schema.nodes
-    if (!image) return
+    const imageBlock = view.state.schema.nodes['image-block']
+    const image = view.state.schema.nodes.image
+    const nodeType = imageBlock ?? image
+    if (!nodeType) return
 
     let tr = view.state.tr
     if (pos != null) {
@@ -75,7 +77,8 @@ export function insertImagesAt(editor, images, pos) {
     }
 
     for (const { src, alt, title = '' } of images) {
-      const node = image.createAndFill({ src, alt, title })
+      const attrs = imageBlock ? { src } : { src, alt, title }
+      const node = nodeType.createAndFill(attrs)
       if (node) tr = tr.replaceSelectionWith(node)
     }
 

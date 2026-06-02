@@ -136,7 +136,7 @@
 
   .preset-btn:hover {
     color: var(--text-heading);
-    border-color: #333;
+    border-color: var(--border);
     background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%);
   }
 

@@ -43,13 +43,22 @@
   const clampWidth = (w) => Math.min(maxWidth(), Math.max(MIN_WIDTH, w))
 
   onMount(() => {
+    const text = research.researchInput.trim()
     draftInput = research.researchInput
     aiLog('ResearchPanel.mounted', {
       input: research.researchInput.slice(0, 80),
       inputLength: research.researchInput.length,
       draftLength: draftInput.length,
+      autoExplain: text.length > 0,
     })
     queueMicrotask(() => {
+      if (text) {
+        submittedContext = text
+        draftInput = ''
+        resetChatInputHeight()
+        startStream(text, () => false, 'explain')
+        return
+      }
       resizeChatInput()
       chatInputEl?.focus()
     })
@@ -322,7 +331,7 @@
 
   .resize-handle:hover::after,
   .research-panel.resizing .resize-handle::after {
-    background: rgba(74, 222, 128, 0.35);
+    background: color-mix(in srgb, var(--crepe-color-primary) 35%, transparent);
   }
 
   .panel-header {
@@ -494,7 +503,7 @@
 
   .save-note-btn:hover {
     color: var(--accent);
-    border-color: rgba(74, 222, 128, 0.4);
+    border-color: color-mix(in srgb, var(--crepe-color-primary) 40%, transparent);
   }
 
   .chat-input-wrap {

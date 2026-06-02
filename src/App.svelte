@@ -11,7 +11,16 @@
   import FileTree from './lib/components/FileTree.svelte'
   import SidebarFileToolbar from './lib/components/SidebarFileToolbar.svelte'
   import { displayFileName } from './lib/fileDisplay.js'
-  import { createFolderInWorkspace, createMarkdownInFolder } from './lib/workspaceFiles.js'
+  import { save } from '@tauri-apps/plugin-dialog'
+  import { writeTextFile } from '@tauri-apps/plugin-fs'
+  import { dirname } from '@tauri-apps/api/path'
+  import {
+    createFolderInWorkspace,
+    createMarkdownInFolder,
+    formatAiNoteContent,
+    saveAiNoteInFolder,
+    slugifyNoteName,
+  } from './lib/workspaceFiles.js'
   import OutlinePanel from './lib/components/OutlinePanel.svelte'
   import WelcomeScreen from './lib/components/WelcomeScreen.svelte'
   import DocumentMetaBar from './lib/components/DocumentMetaBar.svelte'
@@ -375,6 +384,33 @@
     research.openWithText(text)
   }
 
+  async function resolveNoteDir() {
+    if (folderPath) return folderPath
+    if (filePath && !isUntitled(filePath)) return dirname(filePath)
+    return null
+  }
+
+  async function handleSaveNote(context, response) {
+    try {
+      const dir = await resolveNoteDir()
+      if (dir) {
+        const path = await saveAiNoteInFolder(dir, context, response)
+        if (folderPath) fileTree?.refresh()
+        aiLog('handleSaveNote saved', { path })
+        return
+      }
+      const selected = await save({
+        defaultPath: `${slugifyNoteName(context)}.md`,
+        filters: [{ name: 'Markdown', extensions: ['md'] }],
+      })
+      if (!selected) return
+      await writeTextFile(selected, formatAiNoteContent(context, response))
+      aiLog('handleSaveNote saved via dialog', { path: selected })
+    } catch (e) {
+      console.error('Save note failed:', e)
+    }
+  }
+
   // ─── Content sync from editor ─────────────────────────────────
   function handleContentChange(_markdown) {
     ui.handleTopbarOnEdit()
@@ -479,7 +515,7 @@
 
         {#if showResearch}
           {#key researchSessionId}
-            <ResearchPanel />
+            <ResearchPanel onSaveNote={handleSaveNote} />
           {/key}
         {/if}
       </div>
@@ -575,13 +611,13 @@
 
   .outline-float:hover {
     color: var(--text);
-    border-color: #333;
+    border-color: var(--border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
   }
 
   .outline-float.active {
     color: var(--accent);
-    border-color: rgba(74, 222, 128, 0.4);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
     background: var(--accent-dim);
   }
 

@@ -14,9 +14,28 @@ export const DEFAULT_SETTINGS: SettingsState = {
 }
 
 export const FONT_FAMILIES: Record<FontChoice, string> = {
-  monospace: "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace",
-  serif: "'Georgia', 'Cambria', 'Times New Roman', serif",
-  sans: "system-ui, -apple-system, 'Segoe UI', sans-serif",
+  monospace: "'Fira Code', Menlo, Monaco, 'Courier New', Courier, monospace",
+  serif: "Georgia, Cambria, 'Times New Roman', Times, serif",
+  sans: "'Open Sans', Arial, Helvetica, sans-serif",
+}
+
+/** Crepe font roles per user writing-font preference */
+export const CREPE_FONT_PROFILES: Record<
+  FontChoice,
+  { default: string; title: string }
+> = {
+  monospace: {
+    default: FONT_FAMILIES.monospace,
+    title: FONT_FAMILIES.monospace,
+  },
+  serif: {
+    default: FONT_FAMILIES.serif,
+    title: FONT_FAMILIES.serif,
+  },
+  sans: {
+    default: FONT_FAMILIES.sans,
+    title: "Georgia, Cambria, 'Times New Roman', Times, serif",
+  },
 }
 
 export function parseSettings(raw: unknown): SettingsState | null {
@@ -43,5 +62,9 @@ export function applySettingsToDom(state: Pick<SettingsState, 'theme' | 'fontFam
   const html = document.documentElement
   if (state.theme === 'light') html.setAttribute('data-theme', 'light')
   else html.removeAttribute('data-theme')
-  html.style.setProperty('--font-prose', FONT_FAMILIES[state.fontFamily])
+  const fonts = CREPE_FONT_PROFILES[state.fontFamily]
+  html.style.setProperty('--crepe-font-default', fonts.default)
+  html.style.setProperty('--crepe-font-title', fonts.title)
+  html.style.setProperty('--font-prose', fonts.default)
+  html.style.setProperty('--font-ui', fonts.default)
 }

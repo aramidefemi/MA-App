@@ -1,5 +1,5 @@
-/** @typedef {import('./formatBubble.js').FormatActions} FormatActions */
-/** @typedef {import('./formatBubble.js').FormatActiveState} FormatActiveState */
+/** @typedef {import('./formatState.js').FormatActions} FormatActions */
+/** @typedef {import('./formatState.js').FormatActiveState} FormatActiveState */
 
 /** @type {FormatActions | null} */
 let actions = null

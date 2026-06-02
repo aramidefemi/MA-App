@@ -106,17 +106,18 @@
   }
 
   .brand h1 {
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-family: var(--crepe-font-title);
     font-size: 22px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
+    font-weight: var(--crepe-weight-bold);
+    letter-spacing: var(--crepe-tracking-normal);
     color: var(--text-heading);
     text-transform: uppercase;
   }
 
   .tagline {
-    font-family: var(--font-ui);
-    font-size: 12px;
+    font-family: var(--crepe-font-default);
+    font-size: var(--crepe-size-ui);
+    font-weight: var(--crepe-weight-regular);
     color: var(--text-dim);
     line-height: 1.6;
   }
@@ -145,8 +146,8 @@
   }
 
   .action-card:hover {
-    background: #1c1c1c;
-    border-color: #2e2e2e;
+    background: var(--crepe-color-hover);
+    border-color: var(--border);
   }
 
   .action-icon {
@@ -159,10 +160,10 @@
   }
 
   .action-label {
-    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    letter-spacing: 0.01em;
+    font-family: var(--crepe-font-default);
+    font-size: var(--crepe-size-md);
+    font-weight: var(--crepe-weight-medium);
+    letter-spacing: var(--crepe-tracking-tight);
   }
 
   /* Recent projects (disabled)
@@ -221,14 +222,16 @@
   */
 
   .hints {
-    font-size: 10px;
+    font-size: var(--crepe-size-caption);
+    font-weight: var(--crepe-weight-regular);
     color: var(--text-dim);
-    letter-spacing: 0.05em;
+    letter-spacing: var(--crepe-tracking-wide);
   }
 
   kbd {
-    font-family: var(--font-ui);
+    font-family: var(--font-code);
     font-size: 9px;
+    font-weight: var(--crepe-weight-medium);
     background: var(--surface); 
     padding: 1px 5px;
     border-radius: 3px;

@@ -88,7 +88,7 @@
   .tool-btn:hover,
   .tool-btn.active {
     color: var(--text);
-    border-color: #333;
+    border-color: var(--border);
     background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%);
   }
 

@@ -1,5 +1,6 @@
 import { mount } from 'svelte'
 import { getCurrentWindow } from '@tauri-apps/api/window'
+import './lib/editor/crepeTokens.css'
 import './app.css'
 import App from './App.svelte'
 import { app } from './lib/app.js'

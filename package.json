@@ -13,6 +13,7 @@
   "dependencies": {
     "@lucide/svelte": "^1.17.0",
     "@milkdown/core": "^7.21.1",
+    "@milkdown/crepe": "^7.21.1",
     "@milkdown/kit": "^7.21.1",
     "@milkdown/plugin-listener": "^7.21.1",
     "@milkdown/plugin-tooltip": "^7.21.1",

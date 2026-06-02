@@ -267,11 +267,11 @@
 
 <style>
   .bubble {
-    --bubble-bg: #f5f5f2;
-    --bubble-border: #e8e8e4;
-    --bubble-hover: #ebebe7;
-    --bubble-text: #444;
-    --bubble-text-hover: #111;
+    --bubble-bg: var(--crepe-color-surface);
+    --bubble-border: color-mix(in srgb, var(--crepe-color-outline) 25%, var(--crepe-color-surface));
+    --bubble-hover: var(--crepe-color-hover);
+    --bubble-text: var(--crepe-color-on-surface-variant);
+    --bubble-text-hover: var(--crepe-color-on-surface);
     --bubble-btn-h: 34px;
     --bubble-btn-min: 34px;
     --bubble-heading-fs: 12px;
@@ -289,9 +289,10 @@
     background: var(--bubble-bg);
     border: 1px solid var(--bubble-border);
     border-radius: var(--bubble-radius);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.28), 0 1px 4px rgba(0, 0, 0, 0.12);
+    box-shadow: var(--crepe-shadow-2);
     position: relative;
-    font-family: var(--font-ui);
+    font-family: var(--crepe-font-default);
+    font-weight: var(--crepe-weight-regular);
   }
 
   .group {
@@ -303,7 +304,7 @@
   .sep {
     width: 1px;
     height: calc(var(--bubble-btn-h) - 8px);
-    background: #ddd;
+    background: color-mix(in srgb, var(--crepe-color-outline) 50%, transparent);
     margin: 0 5px;
     flex-shrink: 0;
   }
@@ -326,8 +327,8 @@
   .btn.heading {
     min-width: calc(var(--bubble-btn-min) + 2px);
     font-size: var(--bubble-heading-fs);
-    font-weight: 600;
-    letter-spacing: 0.03em;
+    font-weight: var(--crepe-weight-semibold);
+    letter-spacing: var(--crepe-tracking-normal);
   }
 
   .btn:hover:not(:disabled) {
@@ -358,7 +359,7 @@
   .btn.ai {
     color: var(--accent);
     font-size: 20px;
-    font-weight: 800;
+    font-weight: var(--crepe-weight-bold);
     line-height: 1;
     min-width: 38px;
     background: var(--accent-dim);
@@ -373,12 +374,12 @@
   .btn em {
     font-size: var(--bubble-icon-fs);
     font-style: normal;
-    font-weight: 700;
+    font-weight: var(--crepe-weight-bold);
   }
 
   .btn em {
     font-style: italic;
-    font-weight: 500;
+    font-weight: var(--crepe-weight-medium);
   }
 
   .caret {

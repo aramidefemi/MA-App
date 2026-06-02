@@ -1,30 +1,16 @@
 <script>
-  import { mount, unmount, onMount } from 'svelte'
-  import { Editor, editorViewCtx, rootCtx, defaultValueCtx } from '@milkdown/core'
+  import { onMount } from 'svelte'
+  import { editorViewCtx } from '@milkdown/core'
   import { session } from '../modules/session'
-  import { commonmarkIntegration } from '../editor/commonmarkIntegration.js'
-  import { history } from '@milkdown/kit/plugin/history'
-  import { clipboard } from '@milkdown/kit/plugin/clipboard'
-  import { listener, listenerCtx } from '@milkdown/plugin-listener'
-  import FormatBubbleToolbar from './FormatBubbleToolbar.svelte'
-  import SlashMenu from './SlashMenu.svelte'
-  import {
-    configureFormatBubble,
-    formatBubbleTooltip,
-  } from '../editor/formatBubble.js'
-  import { slash, applySlashMenu } from '../editor/slashIntegration.js'
-  import { cursorIntegration, configureCursor } from '../editor/cursorIntegration.js'
-  import { createImageDisplayPlugin } from '../editor/imageDrop.js'
-  import { upload, configureUpload } from '../editor/uploadIntegration.js'
+  import { createCrepe, uploadImageFile } from '../editor/crepeConfig.js'
+  import { clearCrepeApis, wireCrepeApis } from '../editor/crepeBridge.js'
+  import '../editor/crepeTheme.css'
+  import { focusIntegration } from '../editor/focusIntegration.js'
   import { setupTauriImageDrop } from '../editor/tauriImageDrop.js'
   import { createTypewriterScrollPlugin } from '../editor/typewriterScroll.js'
-  import { indent, applyIndentConfig } from '../editor/indentIntegration.js'
-  import { trailingIntegration } from '../editor/trailingIntegration.js'
-  import { wikilinkIntegration, configureWikilink } from '../editor/wikilinkIntegration.js'
-  import { focusIntegration } from '../editor/focusIntegration.js'
+  import { wikilinkIntegration } from '../editor/wikilinkIntegration.js'
   import { resolveWikilinkPath } from '../wikilinkResolve.js'
   import { workspace } from '../modules/workspace'
-  import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
   import { document } from '../modules/document'
 
   /**
@@ -36,8 +22,8 @@
   let props = $props()
 
   let containerEl = $state()
-  /** @type {import('@milkdown/core').Editor | undefined} */
-  let editor
+  /** @type {import('@milkdown/crepe').Crepe | undefined} */
+  let crepe
 
   function applyScrollTop() {
     if (containerEl && session.scrollTop > 0) {
@@ -52,140 +38,90 @@
   onMount(() => {
     const root = containerEl
     let disposed = false
-    let cleanupTauriDrop = () => {}
     root?.addEventListener('scroll', handleScroll, { passive: true })
 
-    cleanupTauriDrop = setupTauriImageDrop({
-      getEditor: () => editor,
+    const cleanupTauriDrop = setupTauriImageDrop({
+      getEditor: () => crepe?.editor,
       getDocumentPath: () => document.filePath,
       onSaveRequired: () => document.saveAs(),
     })
 
-    ;(async () => {
-      const instance = await Editor.make()
-        .config((ctx) => {
-          ctx.set(rootCtx, root)
-          ctx.set(defaultValueCtx, document.content)
-
-          configureCursor(ctx)
-          applyIndentConfig(ctx)
-          configureUpload(ctx, {
+    const instance = createCrepe({
+      root,
+      defaultValue: document.content,
+      onAiClick: props.onAiClick,
+      onNavigateWikilink: async (target) => {
+        const path = await resolveWikilinkPath(workspace.folderPath, target)
+        if (path) await document.openFileFromTree(path)
+      },
+      onUploadImage: (file) =>
+        uploadImageFile(
+          {
             getDocumentPath: () => document.filePath,
             onSaveRequired: () => document.saveAs(),
-          })
+          },
+          file,
+        ),
+    })
+    /** @type {import('@milkdown/crepe').Crepe | undefined} */
+    let active = instance
 
-          configureWikilink(ctx, {
-            onNavigate: async (target) => {
-              const path = await resolveWikilinkPath(workspace.folderPath, target)
-              if (path) await document.openFileFromTree(path)
-            },
-          })
+    instance.editor
+      .use(wikilinkIntegration)
+      .use(focusIntegration)
+      .use(createTypewriterScrollPlugin())
 
-          ctx.get(listenerCtx).markdownUpdated((_ctx, markdown) => {
-            document.setContent(markdown)
-            props.onContentChange?.(markdown)
-          })
-
-          applySlashMenu(ctx, (target, slashProps) => {
-            const instance = mount(SlashMenu, {
-              target,
-              props: slashProps,
-            })
-            return () => unmount(instance)
-          })
-
-          configureFormatBubble(ctx, (target, bubbleProps) => {
-            aiLog('Editor: mounting FormatBubbleToolbar', {
-              hasOnAiClick: !!props.onAiClick,
-              onAiClickType: typeof props.onAiClick,
-              filePath: document.filePath,
-            })
-            const instance = mount(FormatBubbleToolbar, {
-              target,
-              props: {
-                getSelectionText: bubbleProps.getSelectionText,
-                actions: bubbleProps.actions,
-                registerRefresh: bubbleProps.registerRefresh,
-                onAiClick: (text) => {
-                  aiLog('Editor.onAiClick invoked', {
-                    text: text.slice(0, 80),
-                    length: text.length,
-                    hasParentCallback: !!props.onAiClick,
-                    parentType: typeof props.onAiClick,
-                  })
-                  if (!props.onAiClick) {
-                    aiWarn('Editor.onAiClick ABORT — parent callback missing')
-                    return
-                  }
-                  try {
-                    props.onAiClick(text)
-                    aiLog('Editor.onAiClick parent callback returned OK')
-                  } catch (err) {
-                    aiWarn('Editor.onAiClick parent callback THREW', {
-                      message: err?.message,
-                      stack: err?.stack,
-                    })
-                  }
-                },
-              },
-            })
-            return () => {
-              aiLog('Editor: unmounting FormatBubbleToolbar')
-              unmount(instance)
-            }
-          })
-        })
-        .use(commonmarkIntegration)
-        .use(slash)
-        .use(wikilinkIntegration)
-        .use(focusIntegration)
-        .use(indent)
-        .use(history)
-        .use(clipboard)
-        .use(trailingIntegration)
-        .use(cursorIntegration)
-        .use(upload)
-        .use(listener)
-        .use(formatBubbleTooltip)
-        .use(createImageDisplayPlugin(() => document.filePath))
-        .use(createTypewriterScrollPlugin())
-        .create()
-
-      if (disposed) {
-        instance.destroy()
-        return
-      }
-      editor = instance
-      applyScrollTop()
-    })().catch((err) => {
-      console.error('[Editor] Milkdown failed to start:', err)
+    instance.on((listener) => {
+      listener.markdownUpdated((_ctx, markdown) => {
+        document.setContent(markdown)
+        props.onContentChange?.(markdown)
+      })
     })
 
-  $effect(() => {
-    session.focusMode
-    editor?.action((ctx) => {
-      const view = ctx.get(editorViewCtx)
-      view.dispatch(view.state.tr)
+    instance
+      .create()
+      .then(() => {
+        if (disposed) {
+          void instance.destroy()
+          return
+        }
+        wireCrepeApis(instance.editor)
+        crepe = active
+        applyScrollTop()
+      })
+      .catch((err) => {
+        console.error('[Editor] Crepe failed to start:', err)
+      })
+
+    $effect(() => {
+      session.focusMode
+      crepe?.editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx)
+        view.dispatch(view.state.tr)
+      })
     })
-  })
 
     return () => {
       disposed = true
       cleanupTauriDrop()
       root?.removeEventListener('scroll', handleScroll)
-      editor?.destroy()
-      editor = undefined
+      if (active) {
+        clearCrepeApis(active.editor)
+        void active.destroy()
+        active = undefined
+        crepe = undefined
+      }
     }
   })
 </script>
 
-<!-- bind:this works even with $state for DOM refs in Svelte 5 -->
-<div class="editor-root" bind:this={containerEl}></div>
+<div class="editor-root milkdown" bind:this={containerEl}></div>
 
 <style>
   .editor-root {
     flex: 1;
     height: 100%;
     overflow-y: auto;
+    background: var(--crepe-color-background);
   }
 </style>
