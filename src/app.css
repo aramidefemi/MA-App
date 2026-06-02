@@ -84,3 +84,25 @@ html, body {
   opacity: 0.38;
   transition: opacity 0.15s ease;
 }
+
+.milkdown .drift-highlight {
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  cursor: help;
+}
+
+.milkdown .drift-highlight-low {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--accent) 55%, transparent);
+}
+
+.milkdown .drift-highlight-medium {
+  background: color-mix(in srgb, #d4a017 18%, transparent);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #d4a017 70%, transparent);
+}
+
+.milkdown .drift-highlight-high {
+  background: color-mix(in srgb, #e07a4f 22%, transparent);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, #e07a4f 75%, transparent);
+}

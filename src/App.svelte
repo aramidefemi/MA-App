@@ -96,6 +96,11 @@
     if (!driftLastManualCheck || !driftMatchesCurrentFile) return 'idle'
     return 'done'
   })
+  let driftIssues = $derived(
+    driftMatchesCurrentFile && !driftIsStale && driftStatus === 'done'
+      ? (driftLastManualCheck?.result?.issues ?? [])
+      : [],
+  )
   let driftStatusText = $derived.by(() => {
     if (driftStatus === 'checking') return 'Checking AI Draft...'
     if (driftStatus === 'error') return 'Error'
@@ -626,6 +631,10 @@
     })
   }
 
+  function goToNextDriftIssue() {
+    getEditorCommands()?.nextDriftIssue()
+  }
+
   // ─── Topbar distraction-free mode ─────────────────────────────
   function resetTopbar() {
     ui.resetTopbar()
@@ -704,13 +713,13 @@
               class="sidebar-hover-zone"
               class:active={!ui.sidebarChromeVisible}
               role="presentation"
-              onmouseenter={() => (ui.sidebarHovered = true)}
-              onmouseleave={() => (ui.sidebarHovered = false)}
+              onmouseenter={ui.revealSidebarOnHover}
+              onmouseleave={ui.endSidebarHover}
             ></div>
             <aside
               class="sidebar"
-              onmouseenter={() => (ui.sidebarHovered = true)}
-              onmouseleave={() => (ui.sidebarHovered = false)}
+              onmouseenter={ui.revealSidebarOnHover}
+              onmouseleave={ui.endSidebarHover}
             >
               <div class="sidebar-titlebar" data-tauri-drag-region>
                 <SidebarToggle
@@ -732,6 +741,8 @@
                 aiDriftDraftCount={driftDraftCount}
                 aiDriftIsStale={driftIsStale}
                 aiDriftIsRunning={driftIsRunning}
+                aiDriftIssueCount={driftIssues.length}
+                onDriftNavigate={goToNextDriftIssue}
                 bind:searchQuery={fileTreeSearch}
               />
               <FileTree
@@ -802,6 +813,7 @@
                   <Editor
                     onContentChange={handleContentChange}
                     onAiClick={openResearchWithText}
+                    {driftIssues}
                   />
                 {/if}
               {/key}

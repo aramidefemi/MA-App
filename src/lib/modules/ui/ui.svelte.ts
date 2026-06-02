@@ -46,6 +46,15 @@ function handleSidebarOnEdit() {
   sidebarDismissed = true
 }
 
+function revealSidebarOnHover() {
+  sidebarDismissed = false
+  sidebarHovered = true
+}
+
+function endSidebarHover() {
+  sidebarHovered = false
+}
+
 function formatDisplayPath(path) {
   if (homePath && path.startsWith(homePath)) {
     return `~${path.slice(homePath.length)}`
@@ -103,5 +112,7 @@ export const ui = {
   resetSidebar,
   handleTopbarOnEdit,
   handleSidebarOnEdit,
+  revealSidebarOnHover,
+  endSidebarHover,
   formatDisplayPath,
 }

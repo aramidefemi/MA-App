@@ -8,6 +8,11 @@
   import { focusIntegration } from '../editor/focusIntegration.js'
   import { setupTauriImageDrop } from '../editor/tauriImageDrop.js'
   import { createTypewriterScrollPlugin } from '../editor/typewriterScroll.js'
+  import {
+    driftHighlightIntegration,
+    setDriftHighlightIssues,
+  } from '../editor/driftHighlightIntegration.js'
+  import { setDriftNavigationIssues } from '../editor/driftNavigation.js'
   import { wikilinkIntegration } from '../editor/wikilinkIntegration.js'
   import { resolveWikilinkPath } from '../wikilinkResolve.js'
   import { workspace } from '../modules/workspace'
@@ -17,9 +22,10 @@
    * @type {{
    *   onContentChange?: (md: string) => void
    *   onAiClick?: (text: string) => void
+   *   driftIssues?: import('../modules/aiDrift/types').AiDriftIssue[]
    * }}
    */
-  let props = $props()
+  let { onContentChange, onAiClick, driftIssues = [] } = $props()
 
   let containerEl = $state()
   /** @type {import('@milkdown/crepe').Crepe | undefined} */
@@ -36,12 +42,23 @@
     if (containerEl) session.setScrollTop(containerEl.scrollTop)
   }
 
-  $effect(() => {
-    session.focusMode
+  function refreshEditorDecorations() {
     crepe?.editor.action((ctx) => {
       const view = ctx.get(editorViewCtx)
       view.dispatch(view.state.tr)
     })
+  }
+
+  $effect(() => {
+    session.focusMode
+    refreshEditorDecorations()
+  })
+
+  $effect(() => {
+    const issues = driftIssues ?? []
+    setDriftHighlightIssues(issues)
+    setDriftNavigationIssues(issues)
+    refreshEditorDecorations()
   })
 
   onMount(() => {
@@ -71,7 +88,7 @@
       const instance = createCrepe({
         root,
         defaultValue: document.content,
-        onAiClick: props.onAiClick,
+        onAiClick,
         onNavigateWikilink: async (target) => {
           const path = await resolveWikilinkPath(workspace.folderPath, target)
           if (path) await document.openFileFromTree(path)
@@ -91,11 +108,12 @@
         .use(wikilinkIntegration)
         .use(focusIntegration)
         .use(createTypewriterScrollPlugin())
+        .use(driftHighlightIntegration)
 
       instance.on((listener) => {
         listener.markdownUpdated((_ctx, markdown) => {
           document.setContent(markdown)
-          props.onContentChange?.(markdown)
+          onContentChange?.(markdown)
         })
       })
 

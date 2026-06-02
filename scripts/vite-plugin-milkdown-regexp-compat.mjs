@@ -31,19 +31,61 @@ export function patchMilkdownPresetCommonmark(code) {
   return out
 }
 
-/** @param {string} id */
-function isPresetCommonmarkIndex(id) {
-  return id.includes('@milkdown/preset-commonmark') && id.endsWith('/lib/index.js')
+/** @param {string} code */
+export function patchMilkdownPresetGfm(code) {
+  let out = code
+
+  out = out.replace(
+    'markRule(/(?<![\\w:/])(~{1,2})(.+?)\\1(?!\\w|\\/)/,',
+    'markRule(/(?:^|[^\\w:/])(~{1,2})(.+?)\\1(?!\\w|\\/)/,',
+  )
+  out = out.replace(
+    'new InputRule(/^\\|(?<col>\\d+)[xX](?<row>\\d+)\\|\\s$/,',
+    'new InputRule(/^\\|(\\d+)[xX](\\d+)\\|\\s$/,',
+  )
+  out = out.replace(
+    'createTable(ctx, Math.max(Number(match.groups?.row ?? 0), 2), Number(match.groups?.col))',
+    'createTable(ctx, Math.max(Number(match[2] ?? 0), 2), Number(match[1]))',
+  )
+  out = out.replace(
+    'new InputRule(/^\\[(?<checked>\\s|x)\\]\\s$/,',
+    'new InputRule(/^\\[(\\s|x)\\]\\s$/,',
+  )
+  out = out.replace(
+    'const checked = Boolean(match.groups?.checked === "x")',
+    'const checked = Boolean(match[1] === "x")',
+  )
+
+  return out
+}
+
+/** @param {string} id @param {string} pkg */
+function isPresetIndex(id, pkg) {
+  return id.includes(`@milkdown/${pkg}`) && id.endsWith('/lib/index.js')
+}
+
+/** @param {string} code @param {string} id */
+function patchPreset(code, id) {
+  if (isPresetIndex(id, 'preset-commonmark')) return patchMilkdownPresetCommonmark(code)
+  if (isPresetIndex(id, 'preset-gfm')) return patchMilkdownPresetGfm(code)
+  return code
 }
 
 function createEsbuildPatchPlugin() {
+  const presets = [
+    { pkg: 'preset-commonmark', patch: patchMilkdownPresetCommonmark },
+    { pkg: 'preset-gfm', patch: patchMilkdownPresetGfm },
+  ]
+
   return {
     name: 'milkdown-regexp-compat-esbuild',
     setup(build) {
-      build.onLoad({ filter: /\/@milkdown\/preset-commonmark\/lib\/index\.js$/ }, async (args) => {
-        const contents = patchMilkdownPresetCommonmark(await readFile(args.path, 'utf8'))
-        return { contents, loader: 'js' }
-      })
+      for (const { pkg, patch } of presets) {
+        build.onLoad({ filter: new RegExp(`\\/@milkdown\\/${pkg}\\/lib\\/index\\.js$`) }, async (args) => {
+          const contents = patch(await readFile(args.path, 'utf8'))
+          return { contents, loader: 'js' }
+        })
+      }
     },
   }
 }
@@ -55,7 +97,12 @@ export function milkdownRegexpCompat() {
     config() {
       return {
         optimizeDeps: {
-          include: ['@milkdown/preset-commonmark', '@milkdown/kit/preset/commonmark'],
+          include: [
+            '@milkdown/preset-commonmark',
+            '@milkdown/preset-gfm',
+            '@milkdown/kit/preset/commonmark',
+            '@milkdown/kit/preset/gfm',
+          ],
           esbuildOptions: {
             plugins: [createEsbuildPatchPlugin()],
           },
@@ -63,8 +110,7 @@ export function milkdownRegexpCompat() {
       }
     },
     transform(code, id) {
-      if (!isPresetCommonmarkIndex(id)) return null
-      const next = patchMilkdownPresetCommonmark(code)
+      const next = patchPreset(code, id)
       return next === code ? null : { code: next, map: null }
     },
   }

@@ -2,6 +2,12 @@
   import { ChevronRight, FileText, Folder, FolderOpen } from '@lucide/svelte'
   import { readDir } from '@tauri-apps/plugin-fs'
   import { displayFileName } from '../fileDisplay.js'
+  import {
+    buildFileTreeMenuItems,
+    defsForWebMenu,
+    popupNativeFileTreeContextMenu,
+  } from '../fileTreeContextMenu.js'
+  import { isTauri } from '../tauriEnv.js'
   import { isWriterSourceFile } from '../workspaceFileTypes.js'
   import FileTreeContextMenu from './FileTreeContextMenu.svelte'
 
@@ -79,7 +85,9 @@
     return visible
   })
 
-  const contextItems = $derived.by(() => buildMenuItems(contextMenu.entry))
+  const contextItems = $derived.by(() =>
+    defsForWebMenu(buildFileTreeMenuItems(contextMenu.entry, canUndoDelete)),
+  )
 
   $effect(() => {
     const path = rootPath
@@ -200,44 +208,32 @@
     expanded = next
   }
 
-  /** @param {TreeEntry | null} entry */
-  function buildMenuItems(entry) {
-    if (!entry) {
-      const items = [
-        { id: 'new-file', label: 'New File' },
-        { id: 'new-folder', label: 'New Folder' },
-      ]
-      if (canUndoDelete) items.push({ id: 'undo-delete', label: 'Undo Delete' })
-      return items
+  /** @param {TreeEntry} entry @param {MouseEvent} [e] */
+  function activateRow(entry, e) {
+    if (e?.shiftKey || e?.metaKey || e?.ctrlKey) {
+      selectRow(entry, e)
+      return
     }
-
-    const shared = [
-      { id: 'copy-path', label: 'Copy Path' },
-      ...(entry.isDir ? [] : [{ id: 'copy-file', label: 'Copy File' }]),
-      { id: 'rename', label: 'Rename', shortcut: 'F2' },
-      { id: 'reveal', label: 'Reveal in Finder' },
-      { id: 'delete', label: 'Delete', danger: true, shortcut: '⌫' },
-    ]
-
-    if (entry.isDir) {
-      return [
-        { id: 'new-file', label: 'New File' },
-        { id: 'new-folder', label: 'New Folder' },
-        ...shared,
-      ]
-    }
-
-    return [{ id: 'open', label: 'Open' }, { id: 'duplicate', label: 'Duplicate' }, ...shared]
+    selectRow(entry, e)
+    if (entry.isDir) toggleFolder(entry)
+    else openFile(entry)
   }
 
   /** @param {MouseEvent} e @param {TreeEntry | null} entry */
-  function openContextMenu(e, entry) {
+  async function openContextMenu(e, entry) {
     e.preventDefault()
     e.stopPropagation()
     if (entry && !selectedPaths.has(entry.path)) {
       selectedPaths = new Set([entry.path])
       selectionAnchor = entry.path
     }
+
+    if (isTauri()) {
+      contextMenu = { ...contextMenu, entry }
+      await popupNativeFileTreeContextMenu(entry, canUndoDelete, handleMenuSelect)
+      return
+    }
+
     contextMenu = { open: true, x: e.clientX, y: e.clientY, entry }
   }
 
@@ -499,8 +495,7 @@
       aria-expanded={entry.isDir ? isExpanded(entry) : undefined}
       aria-selected={selectedPaths.has(entry.path) || (!entry.isDir && entry.path === activeFile)}
       draggable={true}
-      onclick={(e) => selectRow(entry, e)}
-      ondblclick={() => (entry.isDir ? toggleFolder(entry) : openFile(entry))}
+      onclick={(e) => activateRow(entry, e)}
       oncontextmenu={(e) => openContextMenu(e, entry)}
       onkeydown={(e) => handleRowKeydown(e, entry)}
       ondragstart={(e) => handleDragStart(e, entry)}
@@ -553,14 +548,16 @@
   {/each}
 </div>
 
-<FileTreeContextMenu
-  open={contextMenu.open}
-  x={contextMenu.x}
-  y={contextMenu.y}
-  items={contextItems}
-  onSelect={handleMenuSelect}
-  onClose={closeContextMenu}
-/>
+{#if !isTauri()}
+  <FileTreeContextMenu
+    open={contextMenu.open}
+    x={contextMenu.x}
+    y={contextMenu.y}
+    items={contextItems}
+    onSelect={handleMenuSelect}
+    onClose={closeContextMenu}
+  />
+{/if}
 
 <style>
   .file-tree {

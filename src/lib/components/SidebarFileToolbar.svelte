@@ -13,6 +13,8 @@
     aiDriftDraftCount = null,
     aiDriftIsStale = false,
     aiDriftIsRunning = false,
+    aiDriftIssueCount = 0,
+    onDriftNavigate = () => {},
     searchQuery = $bindable(''),
   } = $props()
 
@@ -21,10 +23,20 @@
     if (aiDriftStatus === 'error') return 'AI Draft scan failed. Try again.'
     if (aiDriftStatus === 'done') {
       const count = aiDriftDraftCount ?? 0
-      return `AI Draft: ${count} drifty passage${count === 1 ? '' : 's'}`
+      const nav =
+        aiDriftIssueCount > 0 && !aiDriftIsStale
+          ? ' Click the count to jump between highlights.'
+          : ''
+      return `AI Draft: ${count} drifty passage${count === 1 ? '' : 's'}.${nav}`
     }
     return 'Re-run AI Draft scan'
   })
+
+  function handleDriftStatusClick() {
+    if (aiDriftStatus === 'done' && aiDriftIssueCount > 0 && !aiDriftIsStale) {
+      onDriftNavigate()
+    }
+  }
 
   function clearSearch() {
     searchQuery = ''
@@ -91,12 +103,22 @@
       </button>
     </Tooltip>
     {#if aiDriftStatus !== 'idle'}
-      <span class="ai-drift-status" class:error={aiDriftStatus === 'error'}>
-        {aiDriftStatusText}
-        {#if aiDriftIsStale}
-          <span class="ai-drift-stale">(stale)</span>
-        {/if}
-      </span>
+      {#if aiDriftStatus === 'done' && aiDriftIssueCount > 0 && !aiDriftIsStale}
+        <button
+          type="button"
+          class="ai-drift-status clickable"
+          onclick={handleDriftStatusClick}
+        >
+          {aiDriftStatusText}
+        </button>
+      {:else}
+        <span class="ai-drift-status" class:error={aiDriftStatus === 'error'}>
+          {aiDriftStatusText}
+          {#if aiDriftIsStale}
+            <span class="ai-drift-stale">(stale)</span>
+          {/if}
+        </span>
+      {/if}
     {/if}
   </div>
 </div>
@@ -238,6 +260,18 @@
     color: var(--text-dim);
     white-space: nowrap;
     pointer-events: none;
+  }
+
+  button.ai-drift-status.clickable {
+    pointer-events: auto;
+    cursor: pointer;
+    color: var(--text);
+    font: inherit;
+  }
+
+  button.ai-drift-status.clickable:hover {
+    border-color: var(--accent);
+    color: var(--accent);
   }
 
   .ai-drift-status.error {

@@ -2,6 +2,7 @@ import { commandsCtx, editorViewCtx } from '@milkdown/core'
 import { undoCommand, redoCommand } from '@milkdown/kit/plugin/history'
 import { undoDepth, redoDepth } from '@milkdown/prose/history'
 import { findNextInView, findPreviousInView } from './findInEditor.js'
+import { cycleDriftIssueInView } from './driftNavigation.js'
 
 /** @typedef {{
  *   undo: () => void,
@@ -10,6 +11,8 @@ import { findNextInView, findPreviousInView } from './findInEditor.js'
  *   canRedo: () => boolean,
  *   findNext: (query: string) => boolean,
  *   findPrevious: (query: string) => boolean,
+ *   nextDriftIssue: () => boolean,
+ *   prevDriftIssue: () => boolean,
  * }} EditorCommands */
 
 /** @type {EditorCommands | null} */
@@ -41,5 +44,7 @@ export function createEditorCommands(ctx) {
     canRedo: () => redoDepth(view().state) > 0,
     findNext: (query) => findNextInView(view(), query),
     findPrevious: (query) => findPreviousInView(view(), query),
+    nextDriftIssue: () => cycleDriftIssueInView(view()),
+    prevDriftIssue: () => cycleDriftIssueInView(view(), { backward: true }),
   }
 }
