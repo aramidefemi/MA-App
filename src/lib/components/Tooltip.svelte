@@ -9,7 +9,7 @@
     children,
   }: {
     text: string
-    position?: 'top' | 'bottom'
+    position?: 'top' | 'bottom' | 'left'
     fill?: boolean
     class?: string
     children: Snippet
@@ -41,7 +41,7 @@
     left: 50%;
     z-index: 200;
     width: max-content;
-    max-width: 220px;
+    max-width: min(280px, 90vw);
     padding: 5px 8px;
     border: 1px solid var(--border);
     border-radius: var(--radius);
@@ -52,7 +52,8 @@
     font-weight: 500;
     line-height: 1.35;
     text-align: center;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     pointer-events: none;
     opacity: 0;
     box-shadow: 0 4px 12px rgb(0 0 0 / 35%);
@@ -66,6 +67,15 @@
 
   .tooltip-wrap[data-position='bottom'] .tooltip {
     top: calc(100% + 6px);
+  }
+
+  .tooltip-wrap[data-position='left'] .tooltip {
+    left: auto;
+    right: calc(100% + 8px);
+    top: 50%;
+    bottom: auto;
+    transform: translateY(-50%);
+    text-align: left;
   }
 
   .tooltip-wrap:hover .tooltip,

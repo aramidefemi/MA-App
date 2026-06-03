@@ -7,7 +7,7 @@ import {
   isImagePath,
   saveImageFromPath,
 } from '../imageAssets.js'
-import { insertImagesAt } from './uploadIntegration.js'
+import { insertImagesAt } from './imageInsert.js'
 
 /** @param {import('@milkdown/prose/view').EditorView} view @param {number} x @param {number} y */
 function dropPosInEditor(view, x, y) {

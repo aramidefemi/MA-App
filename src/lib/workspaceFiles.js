@@ -1,40 +1,31 @@
 import { dirname, basename, join } from '@tauri-apps/api/path'
-import { exists, mkdir, writeTextFile, rename, remove, stat } from '@tauri-apps/plugin-fs'
+import {
+  exists,
+  mkdir,
+  readTextFile,
+  writeTextFile,
+  rename,
+  remove,
+  stat,
+} from '@tauri-apps/plugin-fs'
 import { isWriterSourceFile } from './workspaceFileTypes.js'
+import {
+  assertInsideRoot,
+  isDescendantOrSelf,
+  isPathInsideRoot,
+  joinPath,
+  normalizePath,
+} from './pathUtils.js'
 
-/** @param {string} p */
-export function normalizePath(p) {
-  const normalized = p.replace(/\\/g, '/').replace(/\/+/g, '/')
-  return normalized.length > 1 ? normalized.replace(/\/$/, '') : normalized
-}
-
-/** @param {string} rootPath @param {string} targetPath */
-export function isPathInsideRoot(rootPath, targetPath) {
-  const root = normalizePath(rootPath)
-  const target = normalizePath(targetPath)
-  return target === root || target.startsWith(`${root}/`)
-}
-
-/** @param {string} ancestor @param {string} descendant */
-function isPathEqualOrDescendant(ancestor, descendant) {
-  const a = normalizePath(ancestor)
-  const d = normalizePath(descendant)
-  return d === a || d.startsWith(`${a}/`)
-}
-
-/** @param {string} rootPath @param {string} targetPath @param {string} [label] */
-function assertInsideRoot(rootPath, targetPath, label = 'Path') {
-  if (!isPathInsideRoot(rootPath, targetPath)) {
-    throw new Error(`${label} is outside workspace`)
-  }
-}
-
-export function joinPath(parent, name) {
-  const separator = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
-  return parent.endsWith('/') || parent.endsWith('\\')
-    ? `${parent}${name}`
-    : `${parent}${separator}${name}`
-}
+export {
+  assertInsideRoot,
+  fileName,
+  isDescendantOrSelf,
+  isPathInsideRoot,
+  joinPath,
+  normalizePath,
+  parentDir,
+} from './pathUtils.js'
 
 export async function uniquePath(folderPath, baseName, isDir = false) {
   let candidate = joinPath(folderPath, baseName)
@@ -60,6 +51,13 @@ export async function duplicateFilePath(sourcePath) {
   const dot = name.lastIndexOf('.')
   const copyName = dot > 0 ? `${name.slice(0, dot)}-copy${name.slice(dot)}` : `${name}-copy`
   return uniquePath(dir, copyName)
+}
+
+/** @param {string} sourcePath @param {string} [content] @returns {Promise<string>} */
+export async function duplicateWorkspaceFile(sourcePath, content) {
+  const newPath = await duplicateFilePath(sourcePath)
+  await writeTextFile(newPath, content ?? (await readTextFile(sourcePath)))
+  return newPath
 }
 
 /** @param {string} folderPath */
@@ -109,7 +107,7 @@ export async function moveEntryToFolder(fromPath, destFolderPath, rootPath) {
   assertInsideRoot(rootPath, destFolderPath, 'Destination')
 
   const { isDirectory: isDir } = await stat(fromPath)
-  if (isDir && isPathEqualOrDescendant(fromPath, destFolderPath)) {
+  if (isDir && isDescendantOrSelf(fromPath, destFolderPath)) {
     throw new Error('Cannot move a folder into itself or a descendant')
   }
 

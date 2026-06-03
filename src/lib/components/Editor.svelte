@@ -5,16 +5,16 @@
   import { createCrepe, uploadImageFile } from '../editor/crepeConfig.js'
   import { clearCrepeApis, wireCrepeApis } from '../editor/crepeBridge.js'
   import '../editor/crepeTheme.css'
-  import { focusIntegration } from '../editor/focusIntegration.js'
+  import { getEditorPlugins } from '../editor/editorPlugins.js'
   import { setupTauriImageDrop } from '../editor/tauriImageDrop.js'
-  import { createTypewriterScrollPlugin } from '../editor/typewriterScroll.js'
-  import {
-    driftHighlightIntegration,
-    setDriftHighlightIssues,
-  } from '../editor/driftHighlightIntegration.js'
+  import { setDriftHighlightIssues } from '../editor/driftHighlightIntegration.js'
   import { setDriftNavigationIssues } from '../editor/driftNavigation.js'
-  import { wikilinkIntegration } from '../editor/wikilinkIntegration.js'
-  import { resolveWikilinkPath } from '../wikilinkResolve.js'
+  import {
+    dispatchWikilinkDecorationRefresh,
+    syncWikilinkIndex,
+    wikilinkNearPathCtx,
+    wikilinkWorkspaceCtx,
+  } from '../editor/wikilinkStatus.js'
   import { workspace } from '../modules/workspace'
   import { document } from '../modules/document'
 
@@ -22,10 +22,18 @@
    * @type {{
    *   onContentChange?: (md: string) => void
    *   onAiClick?: (text: string) => void
+   *   onOpenWikilink?: (target: string) => void | Promise<void>
+   *   wikilinkSyncToken?: number
    *   driftIssues?: import('../modules/aiDrift/types').AiDriftIssue[]
    * }}
    */
-  let { onContentChange, onAiClick, driftIssues = [] } = $props()
+  let {
+    onContentChange,
+    onAiClick,
+    onOpenWikilink,
+    wikilinkSyncToken = 0,
+    driftIssues = [],
+  } = $props()
 
   let containerEl = $state()
   /** @type {import('@milkdown/crepe').Crepe | undefined} */
@@ -49,6 +57,17 @@
     })
   }
 
+  async function syncWikilinkSurface() {
+    const root = workspace.folderPath
+    if (!crepe) return
+    await crepe.editor.action(async (ctx) => {
+      ctx.set(wikilinkWorkspaceCtx.key, root)
+      ctx.set(wikilinkNearPathCtx.key, document.filePath)
+      await syncWikilinkIndex(ctx, root)
+      dispatchWikilinkDecorationRefresh(ctx)
+    })
+  }
+
   $effect(() => {
     session.focusMode
     refreshEditorDecorations()
@@ -59,6 +78,13 @@
     setDriftHighlightIssues(issues)
     setDriftNavigationIssues(issues)
     refreshEditorDecorations()
+  })
+
+  $effect(() => {
+    workspace.folderPath
+    document.filePath
+    wikilinkSyncToken
+    void syncWikilinkSurface()
   })
 
   onMount(() => {
@@ -89,10 +115,9 @@
         root,
         defaultValue: document.content,
         onAiClick,
-        onNavigateWikilink: async (target) => {
-          const path = await resolveWikilinkPath(workspace.folderPath, target)
-          if (path) await document.openFileFromTree(path)
-        },
+        workspaceRoot: workspace.folderPath,
+        nearPath: document.filePath,
+        onNavigateWikilink: (target) => onOpenWikilink?.(target),
         onUploadImage: (file) =>
           uploadImageFile(
             {
@@ -104,11 +129,9 @@
       })
       active = instance
 
-      instance.editor
-        .use(wikilinkIntegration)
-        .use(focusIntegration)
-        .use(createTypewriterScrollPlugin())
-        .use(driftHighlightIntegration)
+      for (const plugin of getEditorPlugins()) {
+        instance.editor.use(plugin)
+      }
 
       instance.on((listener) => {
         listener.markdownUpdated((_ctx, markdown) => {
@@ -127,6 +150,7 @@
         crepe = active
         initError = null
         applyScrollTop()
+        await syncWikilinkSurface()
       } catch (err) {
         console.error('[Editor] Crepe failed to start:', err)
         initError = err instanceof Error ? err.message : String(err)

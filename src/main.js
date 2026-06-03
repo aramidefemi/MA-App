@@ -6,6 +6,7 @@ import App from './App.svelte'
 import { app } from './lib/app.js'
 import { initSession } from './lib/modules/session'
 import { initSettings } from './lib/modules/settings'
+import { migrateRecentProjectsIfNeeded } from './lib/modules/persistence/store.js'
 import { isTauri } from './lib/tauriEnv.js'
 
 document.title = app.name
@@ -24,6 +25,12 @@ async function bootstrap() {
   if (!target) {
     console.error('[bootstrap] #app not found')
     return
+  }
+
+  try {
+    await migrateRecentProjectsIfNeeded()
+  } catch (e) {
+    console.warn('[bootstrap] recent projects migration failed:', e)
   }
 
   mount(App, { target })

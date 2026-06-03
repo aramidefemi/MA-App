@@ -25,6 +25,12 @@ These rules apply to any AI agent or developer working on this codebase.
 6. **No network calls in V1.** The app is fully local. No analytics, no crash
    reporting, no telemetry until there is an explicit decision to add it.
 
+## Testing
+
+- New AI Draft lexical rules MUST include a test case in `rules/lexical.test.ts`
+- Path operations MUST include an outside-root rejection test
+- Do not merge detector scoring changes without updating snapshots intentionally
+
 ## What agents must NOT do
 
 - Touch `src-tauri/src/main.rs` without an ADR

@@ -1,17 +1,8 @@
 import { Menu, MenuItem, PredefinedMenuItem } from '@tauri-apps/api/menu'
 import { isTauri } from './tauriEnv.js'
+import { revealInFileManagerLabel } from './platformLabels.js'
 
 /** @typedef {{ id: string, label: string, disabled?: boolean, accelerator?: string }} MenuItemDef */
-
-function revealInFileManagerLabel() {
-  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/.test(navigator.userAgent)) {
-    return 'Reveal in Finder'
-  }
-  if (typeof navigator !== 'undefined' && /Win/.test(navigator.userAgent)) {
-    return 'Reveal in File Explorer'
-  }
-  return 'Reveal in File Manager'
-}
 
 /** @typedef {{ path: string, name: string, isDir: boolean }} TreeEntry */
 

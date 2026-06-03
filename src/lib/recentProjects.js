@@ -1,19 +1,13 @@
-import { BaseDirectory, exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
+import { getKey, setKey } from './modules/persistence/store.js'
 
-const STORE_FILE = 'recent-projects.json'
+const RECENT_KEY = 'recentProjects'
 export const MAX_ENTRIES = 10
 
 /** @typedef {{ type: 'file' | 'folder', path: string, name: string, openedAt: number }} RecentProject */
 
 export async function loadRecentProjects() {
-  try {
-    if (!(await exists(STORE_FILE, { baseDir: BaseDirectory.AppData }))) return []
-    const raw = await readTextFile(STORE_FILE, { baseDir: BaseDirectory.AppData })
-    const parsed = JSON.parse(raw)
-    return Array.isArray(parsed) ? parsed : []
-  } catch {
-    return []
-  }
+  const list = await getKey(RECENT_KEY, [])
+  return Array.isArray(list) ? list : []
 }
 
 /** @param {Omit<RecentProject, 'openedAt'>} entry */
@@ -24,19 +18,8 @@ export async function addRecentProject(entry) {
     ...list.filter((p) => p.path !== entry.path),
   ].slice(0, MAX_ENTRIES)
 
-  await ensureAppDataDir()
-  await writeTextFile(STORE_FILE, JSON.stringify(next), {
-    baseDir: BaseDirectory.AppData,
-  })
+  await setKey(RECENT_KEY, next)
   return next
-}
-
-async function ensureAppDataDir() {
-  try {
-    await mkdir('', { baseDir: BaseDirectory.AppData, recursive: true })
-  } catch {
-    // directory already exists
-  }
 }
 
 export function projectName(path) {

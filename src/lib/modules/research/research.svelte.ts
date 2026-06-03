@@ -8,6 +8,10 @@ function setInput(text) {
   researchInput = text
 }
 
+function open() {
+  openWithText('')
+}
+
 function openWithText(text = '') {
   aiLog('research.openWithText START', {
     text: text.slice(0, 80),
@@ -39,6 +43,7 @@ export const research = {
   get researchInput() { return researchInput },
   get sessionId() { return sessionId },
   setInput,
+  open,
   openWithText,
   close,
   restorePanel,

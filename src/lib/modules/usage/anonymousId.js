@@ -1,15 +1,12 @@
-import { load } from '@tauri-apps/plugin-store'
+import { getKey, setKey } from '../persistence/store.js'
 
-const STORE_FILE = 'ma.json'
 const ANON_ID_KEY = 'anonymous_id'
 
 export async function getAnonymousId() {
-  const store = await load(STORE_FILE)
-  let id = await store.get(ANON_ID_KEY)
+  let id = await getKey(ANON_ID_KEY, null)
   if (!id) {
     id = crypto.randomUUID()
-    await store.set(ANON_ID_KEY, id)
-    await store.save()
+    await setKey(ANON_ID_KEY, id)
   }
   return id
 }

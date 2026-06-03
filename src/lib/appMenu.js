@@ -1,6 +1,7 @@
 import { Menu, MenuItem, PredefinedMenuItem, Submenu } from '@tauri-apps/api/menu'
 import { app } from './app.js'
 import { MAX_ENTRIES } from './recentProjects.js'
+import { revealInFileManagerLabel } from './platformLabels.js'
 
 /** @typedef {import('./recentProjects.js').RecentProject} RecentProject */
 
@@ -38,16 +39,6 @@ import { MAX_ENTRIES } from './recentProjects.js'
  *   canNewFileInFolder: boolean,
  *   canCloseFolder: boolean,
  * }} MenuItemState */
-
-function revealInFileManagerLabel() {
-  if (typeof navigator !== 'undefined' && /Mac|iPhone|iPod|iPad/.test(navigator.userAgent)) {
-    return 'Reveal in Finder'
-  }
-  if (typeof navigator !== 'undefined' && /Win/.test(navigator.userAgent)) {
-    return 'Reveal in File Explorer'
-  }
-  return 'Reveal in File Manager'
-}
 
 /** @type {import('@tauri-apps/api/menu').MenuItem | null} */
 let revealItem = null

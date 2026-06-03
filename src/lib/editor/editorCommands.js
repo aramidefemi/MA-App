@@ -3,6 +3,7 @@ import { undoCommand, redoCommand } from '@milkdown/kit/plugin/history'
 import { undoDepth, redoDepth } from '@milkdown/prose/history'
 import { findNextInView, findPreviousInView } from './findInEditor.js'
 import { cycleDriftIssueInView } from './driftNavigation.js'
+import { readSelectionText } from './selectionText.js'
 
 /** @typedef {{
  *   undo: () => void,
@@ -13,6 +14,7 @@ import { cycleDriftIssueInView } from './driftNavigation.js'
  *   findPrevious: (query: string) => boolean,
  *   nextDriftIssue: () => boolean,
  *   prevDriftIssue: () => boolean,
+ *   getSelectionText: () => string,
  * }} EditorCommands */
 
 /** @type {EditorCommands | null} */
@@ -46,5 +48,6 @@ export function createEditorCommands(ctx) {
     findPrevious: (query) => findPreviousInView(view(), query),
     nextDriftIssue: () => cycleDriftIssueInView(view()),
     prevDriftIssue: () => cycleDriftIssueInView(view(), { backward: true }),
+    getSelectionText: () => readSelectionText(view()),
   }
 }

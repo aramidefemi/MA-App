@@ -1,4 +1,4 @@
-export const STORE_FILE = 'ma.json'
+export { STORE_FILE } from '../persistence/store.js'
 export const SESSION_KEY = 'session'
 
 export type SessionState = {

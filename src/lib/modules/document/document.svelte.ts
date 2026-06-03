@@ -1,7 +1,7 @@
 import { open, save } from '@tauri-apps/plugin-dialog'
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs'
 import { app } from '../../app.js'
-import { duplicateFilePath } from '../../workspaceFiles.js'
+import { duplicateWorkspaceFile } from '../../workspaceFiles.js'
 import { isEditableInEditor, isPreviewFile } from '../../workspaceFileTypes.js'
 
 export const UNTITLED_PATH = 'untitled.md'
@@ -140,8 +140,7 @@ async function openFileFromTree(path: string) {
 
 async function duplicateFile() {
   if (previewMode || !filePath || isUntitled(filePath)) return
-  const path = await duplicateFilePath(filePath)
-  await writeTextFile(path, content)
+  const path = await duplicateWorkspaceFile(filePath, content)
   await loadFileAt(path)
 }
 

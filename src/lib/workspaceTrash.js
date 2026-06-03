@@ -1,13 +1,7 @@
 import { basename, dirname, join } from '@tauri-apps/api/path'
 import { exists, mkdir, readTextFile, rename, writeTextFile } from '@tauri-apps/plugin-fs'
-import { isPathInsideRoot, joinPath, normalizePath, uniquePath } from './workspaceFiles.js'
-
-/** @param {string} rootPath @param {string} targetPath @param {string} [label] */
-function assertInsideRoot(rootPath, targetPath, label = 'Path') {
-  if (!isPathInsideRoot(rootPath, targetPath)) {
-    throw new Error(`${label} is outside workspace`)
-  }
-}
+import { assertInsideRoot, joinPath, normalizePath } from './pathUtils.js'
+import { uniquePath } from './workspaceFiles.js'
 
 const TRASH_DIR = '.calm-trash'
 const MANIFEST = 'manifest.json'

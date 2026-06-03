@@ -1,13 +1,8 @@
+import { markdownToPlain } from './markdown/parse.js'
+
 const WORDS_PER_MINUTE = 200
 
-export function markdownToPlain(markdown) {
-  return markdown
-    .replace(/```[\s\S]*?```/g, '')
-    .replace(/`[^`]+`/g, '')
-    .replace(/^#{1,6}\s+/gm, '')
-    .replace(/[*_~>\[\]()#\-]/g, ' ')
-    .trim()
-}
+export { markdownToPlain }
 
 export function getDocumentStats(markdown) {
   const plain = markdownToPlain(markdown)

@@ -1,11 +1,10 @@
-import { load } from '@tauri-apps/plugin-store'
 import { exists } from '@tauri-apps/plugin-fs'
 import { document, isUntitled } from '../document'
 import { isPreviewFile } from '../../workspaceFileTypes.js'
 import { workspace } from '../workspace'
 import { research } from '../research'
+import { getKey, setKey } from '../persistence/store.js'
 import {
-  STORE_FILE,
   SESSION_KEY,
   DEFAULT_SESSION,
   parseSession,
@@ -19,6 +18,8 @@ let focusMode = $state(false)
 let ready = $state(false)
 let restoring = false
 let persistEnabled = false
+/** @type {ReturnType<typeof setTimeout> | null} */
+let persistTimer = null
 
 export function snapshot(): SessionState {
   return buildSessionSnapshot({
@@ -35,8 +36,7 @@ export function snapshot(): SessionState {
 
 async function readStoredSession(): Promise<SessionState | null> {
   try {
-    const store = await load(STORE_FILE)
-    return parseSession(await store.get(SESSION_KEY))
+    return parseSession(await getKey(SESSION_KEY, null))
   } catch {
     return null
   }
@@ -44,9 +44,7 @@ async function readStoredSession(): Promise<SessionState | null> {
 
 async function writeSession(state: SessionState): Promise<void> {
   try {
-    const store = await load(STORE_FILE)
-    await store.set(SESSION_KEY, state)
-    await store.save()
+    await setKey(SESSION_KEY, state)
   } catch {
     // fail silently
   }
@@ -136,7 +134,11 @@ function toggleFocusMode() {
 
 export function persistSession(): void {
   if (!ready || restoring || !persistEnabled) return
-  void writeSession(snapshot())
+  if (persistTimer) clearTimeout(persistTimer)
+  persistTimer = setTimeout(() => {
+    persistTimer = null
+    void writeSession(snapshot())
+  }, 500)
 }
 
 export const session = {

@@ -80,3 +80,12 @@ source editor with syntax highlighting.
 That is four variables. A state library would be ceremony, not value.
 
 **Revisit when:** multiple open documents, recent files list, or settings panel.
+
+---
+
+## ADR-005 — Crepe-first editor customization
+**Date:** 2026-06-02  
+**Status:** Accepted  
+**Detail:** [DECISIONS-editor-customization-path.md](./DECISIONS-editor-customization-path.md)
+
+**Decision:** Use Crepe built-in toolbar, placeholder, and image upload. Delete unwired custom integrations (slash menu, format bubble, duplicate kit plugins). Register app-specific ProseMirror plugins via `editorPlugins.js`.

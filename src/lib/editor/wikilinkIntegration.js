@@ -10,6 +10,12 @@ import {
   $remark,
 } from '@milkdown/utils'
 import { visit } from 'unist-util-visit'
+import {
+  wikilinkIndexCtx,
+  wikilinkNearPathCtx,
+  wikilinkStatusPlugin,
+  wikilinkWorkspaceCtx,
+} from './wikilinkStatus.js'
 
 const WIKILINK_RE = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g
 
@@ -138,13 +144,25 @@ export const wikilinkClickPlugin = $prose((ctx) => {
   })
 })
 
-/** @param {import('@milkdown/ctx').Ctx} ctx @param {{ onNavigate?: (target: string) => void }} opts */
-export function configureWikilink(ctx, { onNavigate } = {}) {
+/**
+ * @param {import('@milkdown/ctx').Ctx} ctx
+ * @param {{
+ *   onNavigate?: (target: string) => void
+ *   workspaceRoot?: string | null
+ *   nearPath?: string | null
+ * }} opts
+ */
+export function configureWikilink(ctx, { onNavigate, workspaceRoot = null, nearPath = null } = {}) {
   if (onNavigate) ctx.set(wikilinkNavigateCtx.key, onNavigate)
+  ctx.set(wikilinkWorkspaceCtx.key, workspaceRoot)
+  ctx.set(wikilinkNearPathCtx.key, nearPath)
 }
 
 export const wikilinkIntegration = [
   wikilinkNavigateCtx,
+  wikilinkWorkspaceCtx,
+  wikilinkNearPathCtx,
+  wikilinkIndexCtx,
   wikilinkAttr,
   wikilinkSchema.node,
   wikilinkSchema.ctx,
@@ -152,4 +170,5 @@ export const wikilinkIntegration = [
   remarkWikilink.options,
   insertWikilinkInputRule,
   wikilinkClickPlugin,
+  wikilinkStatusPlugin,
 ]

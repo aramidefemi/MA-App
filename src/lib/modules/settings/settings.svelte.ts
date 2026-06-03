@@ -1,5 +1,4 @@
-import { load } from '@tauri-apps/plugin-store'
-import { STORE_FILE } from '../session/session.ts'
+import { getKey, setKey, STORE_FILE } from '../persistence/store.js'
 import {
   SETTINGS_KEY,
   DEFAULT_SETTINGS,
@@ -10,6 +9,8 @@ import {
   type Theme,
   type FontChoice,
 } from './settings.ts'
+
+export { STORE_FILE }
 
 let theme = $state<Theme>('dark')
 let fontFamily = $state<FontChoice>('serif')
@@ -23,8 +24,7 @@ function snapshot(): SettingsState {
 
 async function readStoredSettings(): Promise<SettingsState | null> {
   try {
-    const store = await load(STORE_FILE)
-    return parseSettings(await store.get(SETTINGS_KEY))
+    return parseSettings(await getKey(SETTINGS_KEY, null))
   } catch {
     return null
   }
@@ -32,9 +32,7 @@ async function readStoredSettings(): Promise<SettingsState | null> {
 
 async function writeSettings(state: SettingsState): Promise<void> {
   try {
-    const store = await load(STORE_FILE)
-    await store.set(SETTINGS_KEY, state)
-    await store.save()
+    await setKey(SETTINGS_KEY, state)
   } catch {
     // fail silently
   }

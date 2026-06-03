@@ -1,18 +1,16 @@
 <script>
   import KeySetup from './KeySetup.svelte'
-  import { session, persistSession } from '../modules/session'
+  import { session } from '../modules/session'
   import { settings } from '../modules/settings'
 
   let { onClose } = $props()
 
   function onTypewriterChange(e) {
     session.setTypewriterScroll(e.currentTarget.checked)
-    persistSession()
   }
 
   function onFocusModeChange(e) {
     session.setFocusMode(e.currentTarget.checked)
-    persistSession()
   }
 </script>
 

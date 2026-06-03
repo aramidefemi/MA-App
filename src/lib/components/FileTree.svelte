@@ -9,6 +9,12 @@
   } from '../fileTreeContextMenu.js'
   import { isTauri } from '../tauriEnv.js'
   import { isWriterSourceFile } from '../workspaceFileTypes.js'
+  import {
+    isDescendantOrSelf,
+    joinPath,
+    normalizePath,
+    parentDir,
+  } from '../pathUtils.js'
   import FileTreeContextMenu from './FileTreeContextMenu.svelte'
 
   /** @typedef {{ path: string, name: string, depth: number, isDir: boolean }} TreeEntry */
@@ -415,38 +421,9 @@
     return parent !== normalizePath(toFolder) && !isDescendantOrSelf(from, toFolder)
   }
 
-  /** @param {string} p */
-  function normalizePath(p) {
-    const n = p.replace(/\\/g, '/').replace(/\/+/g, '/')
-    return n.length > 1 ? n.replace(/\/$/, '') : n
-  }
-
-  /** @param {string} filePath */
-  function parentDir(filePath) {
-    const n = normalizePath(filePath)
-    const i = n.lastIndexOf('/')
-    return i > 0 ? n.slice(0, i) : n
-  }
-
-  /** @param {string} ancestor @param {string} target */
-  function isDescendantOrSelf(ancestor, target) {
-    const a = normalizePath(ancestor)
-    const t = normalizePath(target)
-    if (a === t) return true
-    return t.startsWith(`${a}/`)
-  }
-
   /** @param {string} name */
   function shouldIgnore(name) {
     return name.startsWith('.') || name === 'node_modules'
-  }
-
-  /** @param {string} parent @param {string} name */
-  function joinPath(parent, name) {
-    const separator = parent.includes('\\') && !parent.includes('/') ? '\\' : '/'
-    return parent.endsWith('/') || parent.endsWith('\\')
-      ? `${parent}${name}`
-      : `${parent}${separator}${name}`
   }
 
   /** @param {TreeEntry} entry */
