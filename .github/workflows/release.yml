@@ -82,6 +82,6 @@ jobs:
 
             See the [README](https://github.com/${{ github.repository }}#install)
             for installation instructions.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --target ${{ matrix.target }}

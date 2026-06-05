@@ -5,7 +5,7 @@
   import { aiLog, aiWarn } from '../debug/aiFlowLog.js'
   import { renderAiMarkdown } from '../markdown/renderAiMarkdown.js'
   import { research } from '../modules/research'
-  import { document } from '../modules/document'
+  import { document as doc } from '../modules/document'
 
   let { onSaveNote } = $props()
 
@@ -126,7 +126,7 @@
       queryLength: query.length,
       hasContext: !!context,
       contextLength: context?.length ?? 0,
-      documentLength: document.content.length,
+      documentLength: doc.content.length,
     })
     response     = ''
     isStreaming  = true
@@ -140,7 +140,7 @@
       mode,
       input: query,
       context,
-      documentText: document.content,
+      documentText: doc.content,
       onFirstToken: () => {
         if (!isCancelled()) {
           clearDeepThinkingTimer()
@@ -217,6 +217,14 @@
   ></div>
 
   <div class="panel-header">
+    <div
+      class="header-drag"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Resize AI panel"
+      tabindex="-1"
+      onpointerdown={startResize}
+    ></div>
     <span class="panel-logo">✦ ma</span>
     <button class="close-btn" onclick={research.close}>✕</button>
   </div>
@@ -316,37 +324,48 @@
     left: 0;
     top: 0;
     bottom: 0;
-    width: 8px;
-    transform: translateX(-50%);
+    width: 10px;
     cursor: col-resize;
-    z-index: 3;
+    z-index: 4;
     touch-action: none;
   }
 
   .resize-handle::after {
     content: '';
     position: absolute;
-    inset: 0;
-    left: 50%;
-    width: 1px;
-    transform: translateX(-50%);
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 2px;
     background: transparent;
     transition: background 0.15s;
   }
 
   .resize-handle:hover::after,
   .research-panel.resizing .resize-handle::after {
-    background: color-mix(in srgb, var(--crepe-color-primary) 35%, transparent);
+    background: color-mix(in srgb, var(--crepe-color-primary) 45%, transparent);
   }
 
   .panel-header {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 14px;
+    padding: 12px 14px 12px 18px;
     border-bottom: 1px solid var(--border);
     flex-shrink: 0;
     -webkit-app-region: no-drag;
+  }
+
+  .header-drag {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 14px;
+    cursor: col-resize;
+    touch-action: none;
+    z-index: 2;
   }
 
   .panel-logo {

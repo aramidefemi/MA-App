@@ -36,11 +36,9 @@ export function createCrepe(options) {
     root,
     defaultValue,
     features: {
-      // Custom research button via Toolbar buildToolbar — not Crepe AI panel
       [Crepe.Feature.AI]: false,
-      // App shell provides EditorTopbar
       [Crepe.Feature.TopBar]: false,
-      // Default on: Toolbar, Placeholder, ImageBlock, CodeBlock, List, Blockquote, etc.
+      [Crepe.Feature.BlockEdit]: false,
     },
     featureConfigs: {
       [Crepe.Feature.Placeholder]: {
