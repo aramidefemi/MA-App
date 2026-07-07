@@ -47,6 +47,7 @@
       ? (workspace.folderPath.split('/').pop()?.split('\\').pop() ?? null)
       : null,
   )
+  let canRenameTitle = $derived(!!document.filePath && !document.isPreview)
 
   async function refreshTrashState() {
     const root = workspace.folderPath
@@ -63,7 +64,7 @@
   const autosave = createAutosave(() => {
     if (
       !document.filePath ||
-      isUntitled(document.filePath) ||
+      !document.hasDiskPath ||
       !document.isDirty ||
       document.isPreview
     ) {
@@ -185,6 +186,7 @@
       {topbarVisible}
       {fileName}
       {folderName}
+      {canRenameTitle}
       {showFind}
       bind:fileTree
       bind:fileTreeSearch
@@ -223,6 +225,7 @@
       onCopyPath={tree.copyPath}
       onCopyFile={tree.copyFile}
       onUndoDelete={tree.undoDelete}
+      onNameUntitled={(name) => file.nameUntitled(name)}
     />
   {/snippet}
 

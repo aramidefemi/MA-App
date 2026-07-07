@@ -1,23 +1,80 @@
 <script>
-  import { Settings } from '@lucide/svelte'
+  import { Settings, Pencil } from '@lucide/svelte'
   import Tooltip from './Tooltip.svelte'
 
   let {
     fileName = null,
     folderName = null,
     isDirty = false,
+    canRenameTitle = false,
     topbarVisible = false,
     hasSidebar = false,
     saveStatus = 'idle',
     onOpenSettings,
+    onNameUntitled,
   } = $props()
+
+  let isEditingName = $state(false)
+  let draftName = $state('')
+  let nameInput = $state(null)
 
   let fullTitle = $derived(
     fileName ? (folderName ? `${folderName} / ${fileName}` : fileName) : '',
   )
 
+  $effect(() => {
+    if (!canRenameTitle && isEditingName) {
+      isEditingName = false
+      draftName = ''
+    }
+  })
+
   function handleToolbarMouseDown(e) {
     e.preventDefault()
+  }
+
+  function handleTitleMouseDown(e) {
+    e.stopPropagation()
+  }
+
+  function startEditing() {
+    draftName = fileName ?? ''
+    isEditingName = true
+    queueMicrotask(() => {
+      nameInput?.focus()
+      nameInput?.select()
+    })
+  }
+
+  async function commitEditing() {
+    if (!isEditingName) return
+    const next = draftName.trim()
+    isEditingName = false
+    if (!next || next === fileName) return
+    onNameUntitled?.(next)
+  }
+
+  function cancelEditing() {
+    isEditingName = false
+    draftName = ''
+  }
+
+  function handlePencilClick(e) {
+    e.stopPropagation()
+    if (isEditingName) void commitEditing()
+    else startEditing()
+  }
+
+  /** @param {KeyboardEvent} e */
+  function handleNameKeydown(e) {
+    e.stopPropagation()
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      void commitEditing()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      cancelEditing()
+    }
   }
 </script>
 
@@ -33,12 +90,48 @@
       <div
         class="doc-title-center"
         class:visible={topbarVisible}
+        class:renameable={canRenameTitle}
         title={fullTitle}
       >
         {#if folderName}
           <span class="folder-prefix">{folderName} / </span>
         {/if}
-        <span class="file-name">{fileName}</span>
+        {#if isEditingName}
+          <input
+            bind:this={nameInput}
+            class="file-name-input"
+            type="text"
+            bind:value={draftName}
+            aria-label="File name"
+            onclick={(e) => e.stopPropagation()}
+            onkeydown={handleNameKeydown}
+            onblur={() => void commitEditing()}
+          />
+        {:else if canRenameTitle}
+          <button
+            type="button"
+            class="file-name-btn"
+            onmousedown={handleTitleMouseDown}
+            onclick={startEditing}
+          >
+            {fileName}
+          </button>
+        {:else}
+          <span class="file-name">{fileName}</span>
+        {/if}
+        {#if canRenameTitle}
+          <Tooltip text={isEditingName ? 'Save name (Enter)' : 'Rename file'} position="bottom">
+            <button
+              type="button"
+              class="rename-btn"
+              aria-label={isEditingName ? 'Save file name' : 'Rename file'}
+              onmousedown={handleTitleMouseDown}
+              onclick={handlePencilClick}
+            >
+              <Pencil size={14} strokeWidth={1.75} aria-hidden="true" />
+            </button>
+          </Tooltip>
+        {/if}
         {#if isDirty}<span class="dirty-dot" aria-hidden="true"></span>{/if}
       </div>
     {/if}
@@ -147,6 +240,11 @@
     opacity: 1;
   }
 
+  .doc-title-center.renameable {
+    pointer-events: auto;
+    -webkit-app-region: no-drag;
+  }
+
   .folder-prefix {
     color: var(--text-dim);
     flex-shrink: 0;
@@ -158,6 +256,66 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     min-width: 0;
+  }
+
+  .file-name-btn {
+    min-width: 0;
+    padding: 0;
+    border: none;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    line-height: inherit;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    cursor: text;
+    -webkit-app-region: no-drag;
+  }
+
+  .file-name-btn:hover {
+    color: var(--text-heading);
+  }
+
+  .file-name-input {
+    min-width: 0;
+    width: min(180px, 100%);
+    padding: 2px 6px;
+    margin: 0;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text);
+    font: inherit;
+    line-height: 1.2;
+    -webkit-app-region: no-drag;
+  }
+
+  .file-name-input:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .rename-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    flex-shrink: 0;
+    background: none;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-dim);
+    cursor: pointer;
+    -webkit-app-region: no-drag;
+    transition: color 0.15s, background 0.15s;
+  }
+
+  .rename-btn:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--surface) 92%, var(--text) 8%);
   }
 
   .dirty-dot {
