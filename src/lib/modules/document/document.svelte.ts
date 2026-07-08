@@ -6,9 +6,12 @@ import { isEditableInEditor, isPreviewFile } from '../../workspaceFileTypes.js'
 
 export const UNTITLED_PATH = 'untitled.md'
 
-export const isUntitled = (path: string | null) => path === UNTITLED_PATH
+/** True when a path string is a virtual in-memory name (no folder on disk). */
+export const isUntitled = (path: string | null) =>
+  !!path && !path.includes('/') && !path.includes('\\')
 
 let filePath = $state<string | null>(null)
+let hasDiskPath = $state(false)
 let content = $state('')
 let savedContent = $state('')
 let saveStatus = $state<'idle' | 'saving' | 'saved' | 'error'>('idle')
@@ -34,6 +37,7 @@ function resetSaveStatusLater() {
 async function loadFileAt(path: string) {
   const text = await readTextFile(path)
   previewMode = false
+  hasDiskPath = true
   filePath = path
   content = text
   savedContent = text
@@ -41,6 +45,7 @@ async function loadFileAt(path: string) {
 
 async function openPreviewAt(path: string) {
   previewMode = true
+  hasDiskPath = true
   filePath = path
   content = ''
   savedContent = ''
@@ -49,7 +54,7 @@ async function openPreviewAt(path: string) {
 
 async function saveFile() {
   if (previewMode) return
-  if (!filePath || isUntitled(filePath)) {
+  if (!filePath || !hasDiskPath) {
     await saveAs()
     return
   }
@@ -67,11 +72,15 @@ async function saveFile() {
 }
 
 async function saveAs() {
-  const selected = await save({ filters: fileDialogFilters })
+  const selected = await save({
+    filters: fileDialogFilters,
+    defaultPath: !hasDiskPath && filePath ? filePath : undefined,
+  })
   if (!selected) return
   saveStatus = 'saving'
   try {
     await writeTextFile(selected, content)
+    hasDiskPath = true
     filePath = selected
     savedContent = content
     saveStatus = 'saved'
@@ -82,8 +91,21 @@ async function saveAs() {
   }
 }
 
+function renameUntitled(newName: string) {
+  if (hasDiskPath || !filePath || previewMode) return
+
+  const trimmed = newName.trim()
+  if (!trimmed || /[/\\]/.test(trimmed)) return
+
+  const finalName = trimmed.includes('.') ? trimmed : `${trimmed}.md`
+  if (!isEditableInEditor(finalName)) return
+
+  filePath = finalName
+}
+
 function startWriting() {
   previewMode = false
+  hasDiskPath = false
   filePath = UNTITLED_PATH
   content = ''
   savedContent = ''
@@ -96,6 +118,7 @@ function newFile() {
 
 async function closeTab() {
   if (isDirty) await saveFile()
+  hasDiskPath = false
   filePath = null
   content = ''
   savedContent = ''
@@ -108,6 +131,7 @@ function retargetFilePath(oldPath: string, newPath: string) {
 
 function clearIfRemoved(path: string) {
   if (filePath !== path) return
+  hasDiskPath = false
   filePath = null
   content = ''
   savedContent = ''
@@ -139,7 +163,7 @@ async function openFileFromTree(path: string) {
 }
 
 async function duplicateFile() {
-  if (previewMode || !filePath || isUntitled(filePath)) return
+  if (previewMode || !filePath || !hasDiskPath) return
   const path = await duplicateWorkspaceFile(filePath, content)
   await loadFileAt(path)
 }
@@ -152,10 +176,12 @@ export const document = {
   get isDirty() { return isDirty },
   get isPreview() { return isPreview },
   get fileName() { return fileName },
+  get hasDiskPath() { return hasDiskPath },
   loadFileAt,
   openPreviewAt,
   saveFile,
   saveAs,
+  renameUntitled,
   startWriting,
   newFile,
   closeTab,

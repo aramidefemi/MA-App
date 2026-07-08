@@ -1,19 +1,22 @@
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow'
 import { getCurrentWindow } from '@tauri-apps/api/window'
-import { exists } from '@tauri-apps/plugin-fs'
-import { dirname } from '@tauri-apps/api/path'
+import { dirname, join } from '@tauri-apps/api/path'
 import { save } from '@tauri-apps/plugin-dialog'
-import { writeTextFile } from '@tauri-apps/plugin-fs'
+import { exists, rename, writeTextFile } from '@tauri-apps/plugin-fs'
 import { revealItemInDir } from '@tauri-apps/plugin-opener'
 import {
   formatAiNoteContent,
+  renameEntry,
   saveAiNoteInFolder,
   slugifyNoteName,
 } from '../workspaceFiles.js'
 import { addRecentProject, loadRecentProjects, projectName } from '../recentProjects.js'
 import { refreshRecentMenu } from '../appMenu.js'
 import { aiLog } from '../debug/aiFlowLog.js'
+import { isPathInsideRoot } from '../pathUtils.js'
 import { isUntitled } from '../modules/document'
+import { resolveRenameName } from './workspaceTreeActions.js'
+import { isEditableInEditor } from '../workspaceFileTypes.js'
 import { invalidateWikilinkIndex, navigateWikilink } from '../wikilinkResolve.js'
 
 /**
@@ -147,6 +150,36 @@ export function createFileActions(deps) {
     resetTopbar()
   }
 
+  async function nameUntitled(newName) {
+    const path = document.filePath
+    if (!path) return
+
+    const diskName = path.split(/[/\\]/).pop() ?? path
+    const finalName = resolveRenameName(newName, diskName, false)
+    if (!finalName || !isEditableInEditor(finalName)) return
+
+    if (!document.hasDiskPath) {
+      document.renameUntitled(newName)
+      return
+    }
+
+    try {
+      const root = workspace.folderPath
+      let newPath
+      if (root && isPathInsideRoot(root, path)) {
+        newPath = await renameEntry(path, finalName, root, { isDir: false })
+      } else {
+        const parent = await dirname(path)
+        newPath = await join(parent, finalName)
+        await rename(path, newPath)
+      }
+      document.retargetFilePath(path, newPath)
+      if (root && isPathInsideRoot(root, newPath)) refreshFileTree()
+    } catch (e) {
+      console.error('Rename failed:', e)
+    }
+  }
+
   function startWriting() {
     document.startWriting()
     workspace.closeSettings()
@@ -237,6 +270,7 @@ export function createFileActions(deps) {
     openWikilink,
     saveFile,
     saveAs,
+    nameUntitled,
     startWriting,
     newFile,
     newWindow,

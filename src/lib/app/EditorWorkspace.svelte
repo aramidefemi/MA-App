@@ -21,6 +21,7 @@
     topbarVisible,
     fileName,
     folderName,
+    canRenameTitle = false,
     showFind,
     onToggleSidebar,
     onContentChange,
@@ -50,6 +51,7 @@
     onCopyPath,
     onCopyFile,
     onUndoDelete,
+    onNameUntitled,
   } = $props()
 </script>
 
@@ -118,10 +120,12 @@
         {fileName}
         {folderName}
         isDirty={document.isDirty}
+        {canRenameTitle}
         {topbarVisible}
         {hasSidebar}
         saveStatus={document.saveStatus}
         onOpenSettings={() => workspace.openSettings()}
+        onNameUntitled={onNameUntitled}
       />
     </div>
 
