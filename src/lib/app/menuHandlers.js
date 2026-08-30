@@ -35,6 +35,7 @@ export function createMenuHandlers(ctx) {
     exportPdf: () => exportPdf(document.content, getFileName()),
     print: () => printDocument(getFileName() ?? 'Document'),
     closeTab: () => file.closeTab(),
+    goHome: () => file.goHome(),
     closeAll: () => file.closeAll(),
     toggleSidebar,
     toggleOutline: () => workspace.toggleOutline(),

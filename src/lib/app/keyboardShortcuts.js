@@ -21,6 +21,7 @@ function isEditorTarget(e) {
  *     openFile: () => void | Promise<void>,
  *     openFolder: () => void | Promise<void>,
  *     closeTab: () => void | Promise<void>,
+ *     goHome: () => void | Promise<void>,
  *     closeAll: () => void | Promise<void>,
  *     toggleFind: () => void,
  *   },
@@ -52,6 +53,10 @@ export function createKeyboardHandler(ctx) {
     if (mod && e.key === 'p') {
       e.preventDefault()
       printDocument(getFileName() ?? 'Document')
+    }
+    if (mod && e.shiftKey && e.key.toLowerCase() === 'h' && !inEditor) {
+      e.preventDefault()
+      void actions.goHome()
     }
     if (mod && e.altKey && e.key.toLowerCase() === 'w') {
       e.preventDefault()

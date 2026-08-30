@@ -21,6 +21,7 @@ import { revealInFileManagerLabel } from './platformLabels.js'
  *   exportPdf: () => void | Promise<void>,
  *   print: () => void | Promise<void>,
  *   closeTab: () => void | Promise<void>,
+ *   goHome: () => void | Promise<void>,
  *   closeAll: () => void | Promise<void>,
  *   toggleSidebar: () => void,
  *   toggleOutline: () => void,
@@ -231,6 +232,12 @@ export async function setupAppMenu(handlers) {
         text: 'Close Tab',
         accelerator: 'CmdOrCtrl+W',
         action: () => handlers.closeTab(),
+      }),
+      await MenuItem.new({
+        id: 'file-welcome',
+        text: 'Welcome Screen',
+        accelerator: 'CmdOrCtrl+Shift+H',
+        action: () => handlers.goHome(),
       }),
       await PredefinedMenuItem.new({
         text: 'Close Window',

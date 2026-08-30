@@ -77,7 +77,7 @@
   {/if}
 
   <div class="hints">
-    <kbd>⌘N</kbd> start writing &nbsp;·&nbsp; <kbd>⌘O</kbd> open file &nbsp;·&nbsp; <kbd>⌘⇧O</kbd> open folder
+    <kbd>⌘N</kbd> start writing &nbsp;·&nbsp; <kbd>⌘O</kbd> open file &nbsp;·&nbsp; <kbd>⌘⇧O</kbd> open folder &nbsp;·&nbsp; <kbd>⌘⇧H</kbd> welcome screen
   </div>
 </div>
 

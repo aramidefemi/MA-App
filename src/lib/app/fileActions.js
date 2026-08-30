@@ -14,6 +14,7 @@ import { addRecentProject, loadRecentProjects, projectName } from '../recentProj
 import { refreshRecentMenu } from '../appMenu.js'
 import { aiLog } from '../debug/aiFlowLog.js'
 import { isPathInsideRoot } from '../pathUtils.js'
+import { research } from '../modules/research'
 import { isUntitled } from '../modules/document'
 import { resolveRenameName } from './workspaceTreeActions.js'
 import { isEditableInEditor } from '../workspaceFileTypes.js'
@@ -154,6 +155,7 @@ export function createFileActions(deps) {
     const path = document.filePath
     if (!path) return
 
+    // Split on / or \ so we get the filename from full paths (e.g. /workspace/notes/a.md → a.md)
     const diskName = path.split(/[/\\]/).pop() ?? path
     const finalName = resolveRenameName(newName, diskName, false)
     if (!finalName || !isEditableInEditor(finalName)) return
@@ -210,6 +212,16 @@ export function createFileActions(deps) {
     await document.closeTab()
     workspace.closeOutline()
     workspace.closeSettings()
+    resetTopbar()
+  }
+
+  async function goHome() {
+    autosave.cancel()
+    await document.closeTab()
+    closeFolder()
+    workspace.closeOutline()
+    workspace.closeSettings()
+    research.close()
     resetTopbar()
   }
 
@@ -275,6 +287,7 @@ export function createFileActions(deps) {
     newFile,
     newWindow,
     closeTab,
+    goHome,
     closeAll,
     saveResearchNote,
     loadRecentOnStartup,
