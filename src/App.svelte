@@ -107,6 +107,10 @@
       openFile: () => file.openFile(),
       openFolder: () => file.openFolder(),
       closeTab: () => file.closeTab(),
+      goHome: () => {
+        showFind = false
+        void file.goHome()
+      },
       closeAll: () => file.closeAll(),
       toggleFind: () => {
         if (document.filePath && !document.isPreview) showFind = true
